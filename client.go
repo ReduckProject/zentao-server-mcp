@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"time"
@@ -1153,10 +1156,21 @@ func (c *ZentaoClient) GetExecutionStories(token string, executionID string) (*S
 // AddBugComment 给Bug添加备注（使用表单接口）
 func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string) (map[string]interface{}, error) {
 	// 从 REST API 的 baseURL 提取 web 基础地址
-	// 例如: http://host/zentao/api.php/v1 -> http://host/zentao
 	webBaseURL := c.baseURL
 	if idx := findStr(webBaseURL, "/api.php"); idx > 0 {
 		webBaseURL = webBaseURL[:idx]
+	}
+
+	// 使用带 cookie jar 的客户端
+	jar, _ := cookiejar.New(nil)
+	sessionClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Jar:     jar,
+	}
+
+	// 先登录获取 session
+	if err := c.loginForSessionWithClient(webBaseURL, sessionClient); err != nil {
+		return nil, fmt.Errorf("登录失败: %w", err)
 	}
 
 	url := fmt.Sprintf("%s/action-comment-bug-%s.html", webBaseURL, bugID)
@@ -1164,6 +1178,7 @@ func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string)
 	// 构建表单数据
 	formData := urlValues{
 		"actioncomment": []string{fmt.Sprintf("<p><span>%s</span></p>", comment)},
+		"uid":           []string{generateUID()},
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBufferString(formData.Encode()))
@@ -1172,9 +1187,11 @@ func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string)
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Token", token)
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("Referer", webBaseURL+"/bug-view-"+bugID+".html")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := sessionClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("请求失败: %w", err)
 	}
@@ -1194,6 +1211,86 @@ func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string)
 		"message": "备注添加成功",
 		"bug_id":  bugID,
 	}, nil
+}
+
+// loginForSessionWithClient 使用指定客户端登录
+func (c *ZentaoClient) loginForSessionWithClient(webBaseURL string, client *http.Client) error {
+	config := globalTokenManager.GetConfig()
+	if config == nil {
+		return fmt.Errorf("未配置禅道账号")
+	}
+
+	// 1. 获取 verifyRand（使用同一个 client 保持 cookie）
+	randResp, err := client.Get(webBaseURL + "/user-refreshRandom.html")
+	if err != nil {
+		return fmt.Errorf("获取 verifyRand 失败: %w", err)
+	}
+	randBody, _ := io.ReadAll(randResp.Body)
+	randResp.Body.Close()
+	verifyRand := strings.TrimSpace(string(randBody))
+
+	// 2. 加密密码: md5(md5(password) + verifyRand)
+	passwordMD5 := md5Hash(config.Password)
+	passwordEnc := md5Hash(passwordMD5 + verifyRand)
+
+	// 3. 登录
+	loginURL := webBaseURL + "/user-login.html"
+	formData := urlValues{
+		"account":          []string{config.Account},
+		"password":         []string{passwordEnc},
+		"passwordStrength": []string{"2"},
+		"referer":          []string{"/zentao/"},
+		"verifyRand":       []string{verifyRand},
+		"keepLogin":        []string{"1"},
+		"captcha":          []string{""},
+	}
+
+	req, err := http.NewRequest("POST", loginURL, bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return fmt.Errorf("创建登录请求失败: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("Referer", webBaseURL+"/user-login.html")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("登录请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查登录结果
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Result  string `json:"result"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &result); err == nil {
+		if result.Result != "success" {
+			return fmt.Errorf("登录失败: %s", result.Message)
+		}
+	}
+
+	return nil
+}
+
+// md5Hash 计算 MD5 哈希
+func md5Hash(s string) string {
+	h := md5.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// generateUID 生成随机 UID
+func generateUID() string {
+	const hexChars = "0123456789abcdef"
+	b := make([]byte, 12)
+	for i := range b {
+		b[i] = hexChars[i%16]
+	}
+	return string(b)
 }
 
 // urlValues 简单的 URL 编码表单数据
