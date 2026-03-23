@@ -4,13 +4,14 @@
 
 ## 功能特性
 
-- **Token 管理**: 自动获取和刷新 Token，支持过期时间配置
+- **Token 管理**: 自动获取和刷新 Token，支持过期时间配置（秒）
 - **产品管理**: 获取产品列表、产品详情、创建产品
-- **Bug 管理**: 创建 Bug、修改 Bug、获取 Bug 列表和详情
+- **Bug 管理**: 创建 Bug、修改 Bug、获取 Bug 列表和详情、添加备注
 - **版本管理**: 创建版本、修改版本、获取版本列表和详情
 - **需求管理**: 创建需求、获取需求列表和详情
-- **默认产品配置**: 支持配置默认产品，简化操作
+- **默认产品配置**: 支持配置默认产品（ID或名称），简化操作
 - **精简输出**: 列表接口默认返回精简参数，可选返回完整数据
+- **灵活配置**: 支持命令行参数指定配置文件路径
 
 ## 安装
 
@@ -45,6 +46,19 @@ go build -o zentao-mcp .
   "mcpServers": {
     "zentao": {
       "command": "path/to/zentao-mcp.exe"
+    }
+  }
+}
+```
+
+指定配置文件：
+
+```json
+{
+  "mcpServers": {
+    "zentao": {
+      "command": "path/to/zentao-mcp.exe",
+      "args": ["-c", "/path/to/zentao_config.json"]
     }
   }
 }
@@ -122,7 +136,15 @@ go build -o zentao-mcp .
 - product_id: 产品ID或名称 (可选，使用默认产品)
 ```
 
-### 3. 获取产品列表
+### 3. 给 Bug 添加备注
+
+```
+调用 add_bug_comment 工具:
+- bug_id: Bug ID
+- comment: 备注内容
+```
+
+### 4. 获取产品列表
 
 ```
 调用 get_products 工具:
@@ -141,25 +163,29 @@ go build -o zentao-mcp .
 
 ### Bug 类型
 
-- `codeerror` - 代码错误
-- `config` - 配置相关
-- `install` - 安装部署
-- `security` - 安全相关
-- `performance` - 性能问题
-- `standard` - 标准规范
-- `automation` - 测试脚本
-- `designdefect` - 设计缺陷
-- `others` - 其他
+| 类型 | 说明 |
+|-----|------|
+| `codeerror` | 代码错误 |
+| `config` | 配置相关 |
+| `install` | 安装部署 |
+| `security` | 安全相关 |
+| `performance` | 性能问题 |
+| `standard` | 标准规范 |
+| `automation` | 测试脚本 |
+| `designdefect` | 设计缺陷 |
+| `others` | 其他 |
 
 ### 需求类型
 
-- `feature` - 功能
-- `interface` - 接口
-- `performance` - 性能
-- `safe` - 安全
-- `experience` - 体验
-- `improve` - 改进
-- `other` - 其他
+| 类型 | 说明 |
+|-----|------|
+| `feature` | 功能 |
+| `interface` | 接口 |
+| `performance` | 性能 |
+| `safe` | 安全 |
+| `experience` | 体验 |
+| `improve` | 改进 |
+| `other` | 其他 |
 
 ## 开发
 
