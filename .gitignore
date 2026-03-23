@@ -1,0 +1,10 @@
+# 编译产物
+zentao-mcp.exe
+zentao-mcp
+
+# 配置文件（包含敏感信息）
+zentao_config.json
+
+# IDE
+.idea/
+*.iml
