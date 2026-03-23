@@ -144,7 +144,21 @@ go build -o zentao-mcp .
 - comment: 备注内容
 ```
 
-### 4. 获取产品列表
+### 4. 获取 Bug 列表
+
+```
+调用 get_bugs 工具:
+- product_id: 产品ID或名称 (可选，使用默认产品)
+- status: Bug状态 (可选)
+  - assigntome: 我的bug
+  - all: 所有包括关闭的
+  - 不传: 默认未关闭的
+- limit: 每页数量 (可选)
+- page: 页码 (可选)
+- full: true/false (是否返回完整参数)
+```
+
+### 5. 获取产品列表
 
 ```
 调用 get_products 工具:
