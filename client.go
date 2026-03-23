@@ -1521,8 +1521,8 @@ func (c *ZentaoClient) GetUserProfile(token string) (*UserProfileResponse, error
 	return &result, nil
 }
 
-// GetTodayDynamic 获取今日动态
-func (c *ZentaoClient) GetTodayDynamic(userID string) (map[string]interface{}, error) {
+// GetTodayDynamic 获取动态
+func (c *ZentaoClient) GetTodayDynamic(userID string, timeRange string) (map[string]interface{}, error) {
 	// 从 REST API 的 baseURL 提取 web 基础地址
 	webBaseURL := c.baseURL
 	if idx := findStr(webBaseURL, "/api.php"); idx > 0 {
@@ -1540,8 +1540,11 @@ func (c *ZentaoClient) GetTodayDynamic(userID string) (map[string]interface{}, e
 		return nil, fmt.Errorf("登录失败: %w", err)
 	}
 
-	// 构建URL: /company-dynamic-today--0--no-{userID}-0-0-0.json
-	apiURL := fmt.Sprintf("%s/company-dynamic-today--0--no-%s-0-0-0.json", webBaseURL, userID)
+	// 构建URL: /company-dynamic-{timeRange}--0--no-{userID}-0-0-0.json
+	if timeRange == "" {
+		timeRange = "today"
+	}
+	apiURL := fmt.Sprintf("%s/company-dynamic-%s--0--no-%s-0-0-0.json", webBaseURL, timeRange, userID)
 
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {

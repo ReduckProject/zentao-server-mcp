@@ -94,7 +94,10 @@ func main() {
 
 	// 获取今日动态
 	getTodayDynamicTool := mcp.NewTool("get_today_dynamic",
-		mcp.WithDescription("获取当前用户的今日动态"),
+		mcp.WithDescription("获取当前用户的动态"),
+		mcp.WithString("time_range",
+			mcp.Description("时间范围: today(今日) | yesterday(昨日) | thisWeek(本周) | lastWeek(上周) | thisMonth(本月) | lastMonth(上月)，默认today"),
+		),
 	)
 
 	// 获取产品列表
@@ -684,15 +687,19 @@ func getTodayDynamicHandler(ctx context.Context, request mcp.CallToolRequest) (*
 		}
 	}
 
+	// 获取时间范围参数
+	timeRange, _ := request.Params.Arguments["time_range"].(string)
+
 	userID := fmt.Sprintf("%v", profile.Profile.ID)
-	dynamics, err := client.GetTodayDynamic(userID)
+	dynamics, err := client.GetTodayDynamic(userID, timeRange)
 	if err != nil {
-		return errorResult(fmt.Sprintf("获取今日动态失败: %v", err)), nil
+		return errorResult(fmt.Sprintf("获取动态失败: %v", err)), nil
 	}
 
 	data, err := toJSON(map[string]interface{}{
-		"user_id":  userID,
-		"dynamic":  dynamics,
+		"user_id":     userID,
+		"time_range":  timeRange,
+		"dynamic":     dynamics,
 	})
 	if err != nil {
 		return errorResult(fmt.Sprintf("序列化动态数据失败: %v", err)), nil
