@@ -74,6 +74,7 @@ go build -o zentao-mcp .
 | `get_token` | 获取禅道 API Token（自动处理缓存和刷新） |
 | `refresh_token` | 强制刷新 Token（忽略缓存） |
 | `token_status` | 查看当前 Token 状态和配置信息 |
+| `get_profile` | 获取当前登录用户的个人信息 |
 
 ### 产品管理
 

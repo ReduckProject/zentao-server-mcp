@@ -1461,3 +1461,62 @@ func stripHTMLTags(s string) string {
 	}
 	return strings.TrimSpace(result.String())
 }
+
+// UserProfile 用户个人信息
+type UserProfile struct {
+	ID       interface{} `json:"id"`
+	Type     string      `json:"type"`
+	Dept     interface{} `json:"dept"`
+	Account  string      `json:"account"`
+	Realname string      `json:"realname"`
+	Nickname string      `json:"nickname"`
+	Avatar   string      `json:"avatar"`
+	Birthday string      `json:"birthday"`
+	Gender   string      `json:"gender"`
+	Mobile   string      `json:"mobile"`
+	Phone    string      `json:"phone"`
+	Weixin   string      `json:"weixin"`
+	Address  string      `json:"address"`
+	Join     string      `json:"join"`
+	Admin    bool        `json:"admin"`
+	Email    string      `json:"email"`
+}
+
+// UserProfileResponse 用户信息响应
+type UserProfileResponse struct {
+	Profile UserProfile `json:"profile"`
+}
+
+// GetUserProfile 获取当前用户信息
+func (c *ZentaoClient) GetUserProfile(token string) (*UserProfileResponse, error) {
+	url := fmt.Sprintf("%s/user", c.baseURL)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	req.Header.Set("Token", token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("API返回错误状态码 %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result UserProfileResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	return &result, nil
+}
