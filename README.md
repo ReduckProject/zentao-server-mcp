@@ -94,7 +94,7 @@ go build -o zentao-mcp .
 - base_url: http://your-zentao-server/api.php/v1
 - account: your_account
 - password: your_password
-- token_expiry: 24 (可选，默认24小时)
+- token_expiry: 86400 (可选，默认86400秒即24小时)
 - default_product: 产品名称或ID (可选，设置默认产品)
 ```
 

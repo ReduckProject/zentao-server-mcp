@@ -48,7 +48,7 @@ func main() {
 			mcp.Description("登录密码"),
 		),
 		mcp.WithNumber("token_expiry",
-			mcp.Description("Token过期时间（小时），默认24小时"),
+			mcp.Description("Token过期时间（秒），默认86400秒（24小时）"),
 		),
 		mcp.WithString("default_product",
 			mcp.Description("默认产品ID或名称（创建Bug、需求等时使用）"),
@@ -490,7 +490,7 @@ func configureHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 		return errorResult("password is required"), nil
 	}
 
-	tokenExpiry := 24
+	tokenExpiry := 86400
 	if exp, ok := request.Params.Arguments["token_expiry"].(float64); ok {
 		tokenExpiry = int(exp)
 	}

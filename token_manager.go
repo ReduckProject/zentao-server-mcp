@@ -14,7 +14,7 @@ type Config struct {
 	BaseURL        string `json:"base_url"`
 	Account        string `json:"account"`
 	Password       string `json:"password"`
-	TokenExpiry    int    `json:"token_expiry"`    // Token过期时间（小时），默认24小时
+	TokenExpiry    int    `json:"token_expiry"`    // Token过期时间（秒），默认86400秒（24小时）
 	DefaultProduct string `json:"default_product"` // 默认产品ID或名称
 }
 
@@ -61,7 +61,7 @@ func (tm *TokenManager) LoadConfig() error {
 
 	// 设置默认过期时间
 	if tm.config.TokenExpiry <= 0 {
-		tm.config.TokenExpiry = 24
+		tm.config.TokenExpiry = 86400
 	}
 
 	tm.client = NewZentaoClient(tm.config.BaseURL)
@@ -127,7 +127,7 @@ func (tm *TokenManager) RefreshToken() (string, error) {
 	}
 
 	// 计算过期时间，提前10分钟刷新
-	expiry := time.Duration(tm.config.TokenExpiry) * time.Hour
+	expiry := time.Duration(tm.config.TokenExpiry) * time.Second
 	tm.cache = &TokenCache{
 		Token:      token,
 		ExpireTime: time.Now().Add(expiry - 10*time.Minute),
@@ -148,7 +148,7 @@ func (tm *TokenManager) GetTokenInfo() map[string]interface{} {
 	if tm.config != nil {
 		result["base_url"] = tm.config.BaseURL
 		result["account"] = tm.config.Account
-		result["token_expiry_hours"] = tm.config.TokenExpiry
+		result["token_expiry_seconds"] = tm.config.TokenExpiry
 	}
 
 	if tm.cache != nil {
