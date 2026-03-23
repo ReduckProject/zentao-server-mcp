@@ -307,6 +307,9 @@ type ZentaoClient struct {
 	httpClient *http.Client
 }
 
+// apiPrefix API路径前缀
+const apiPrefix = "/api.php/v1"
+
 // NewZentaoClient 创建禅道客户端
 func NewZentaoClient(baseURL string) *ZentaoClient {
 	return &ZentaoClient{
@@ -325,7 +328,7 @@ func GetToken(baseURL, account, password string) (string, error) {
 
 // GetToken 获取禅道API Token
 func (c *ZentaoClient) GetToken(account, password string) (string, error) {
-	url := fmt.Sprintf("%s/api.php/v1/tokens", c.baseURL)
+	url := fmt.Sprintf("%s%s/tokens", c.baseURL, apiPrefix)
 
 	reqBody := TokenRequest{
 		Account:  account,
@@ -373,7 +376,7 @@ func (c *ZentaoClient) GetToken(account, password string) (string, error) {
 
 // GetProducts 获取产品列表
 func (c *ZentaoClient) GetProducts(token string) (*ProductListResponse, error) {
-	url := fmt.Sprintf("%s/api.php/v1/products", c.baseURL)
+	url := fmt.Sprintf("%s%s/products", c.baseURL, apiPrefix)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -407,7 +410,7 @@ func (c *ZentaoClient) GetProducts(token string) (*ProductListResponse, error) {
 
 // GetProduct 获取产品详情
 func (c *ZentaoClient) GetProduct(token string, productID string) (*ProductDetail, error) {
-	url := fmt.Sprintf("%s/api.php/v1/products/%s", c.baseURL, productID)
+	url := fmt.Sprintf("%s%s/products/%s", c.baseURL, apiPrefix, productID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -447,7 +450,7 @@ func (c *ZentaoClient) GetProduct(token string, productID string) (*ProductDetai
 
 // CreateProduct 创建产品
 func (c *ZentaoClient) CreateProduct(token string, reqBody *CreateProductRequest) (*CreateProductResponse, error) {
-	url := fmt.Sprintf("%s/api.php/v1/products", c.baseURL)
+	url := fmt.Sprintf("%s%s/products", c.baseURL, apiPrefix)
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -493,7 +496,7 @@ func (c *ZentaoClient) CreateProduct(token string, reqBody *CreateProductRequest
 
 // CreateBug 创建Bug
 func (c *ZentaoClient) CreateBug(token string, productID string, reqBody *BugRequest) (*Bug, error) {
-	url := fmt.Sprintf("%s/api.php/v1/products/%s/bugs", c.baseURL, productID)
+	url := fmt.Sprintf("%s%s/products/%s/bugs", c.baseURL, apiPrefix, productID)
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -539,7 +542,7 @@ func (c *ZentaoClient) CreateBug(token string, productID string, reqBody *BugReq
 
 // UpdateBug 修改Bug
 func (c *ZentaoClient) UpdateBug(token string, bugID string, reqBody *BugRequest) (*Bug, error) {
-	url := fmt.Sprintf("%s/api.php/v1/bugs/%s", c.baseURL, bugID)
+	url := fmt.Sprintf("%s%s/bugs/%s", c.baseURL, apiPrefix, bugID)
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -584,7 +587,7 @@ func (c *ZentaoClient) UpdateBug(token string, bugID string, reqBody *BugRequest
 }
 // GetBugs 获取产品Bug列表
 func (c *ZentaoClient) GetBugs(token string, productID string) (*BugListResponse, error) {
-	url := fmt.Sprintf("%s/api.php/v1/products/%s/bugs", c.baseURL, productID)
+	url := fmt.Sprintf("%s%s/products/%s/bugs", c.baseURL, apiPrefix, productID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -624,7 +627,7 @@ func (c *ZentaoClient) GetBugs(token string, productID string) (*BugListResponse
 
 // GetBug 获取Bug详情
 func (c *ZentaoClient) GetBug(token string, bugID string) (*Bug, error) {
-	url := fmt.Sprintf("%s/api.php/v1/bugs/%s", c.baseURL, bugID)
+	url := fmt.Sprintf("%s%s/bugs/%s", c.baseURL, apiPrefix, bugID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -707,7 +710,7 @@ type BuildListResponse struct {
 
 // CreateBuild 创建版本
 func (c *ZentaoClient) CreateBuild(token string, projectID string, reqBody *BuildRequest) (*Build, error) {
-	url := fmt.Sprintf("%s/api.php/v1/projects/%s/builds", c.baseURL, projectID)
+	url := fmt.Sprintf("%s%s/projects/%s/builds", c.baseURL, apiPrefix, projectID)
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -752,7 +755,7 @@ func (c *ZentaoClient) CreateBuild(token string, projectID string, reqBody *Buil
 
 // UpdateBuild 修改版本
 func (c *ZentaoClient) UpdateBuild(token string, buildID string, reqBody *BuildRequest) (*Build, error) {
-	url := fmt.Sprintf("%s/api.php/v1/builds/%s", c.baseURL, buildID)
+	url := fmt.Sprintf("%s%s/builds/%s", c.baseURL, apiPrefix, buildID)
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -797,7 +800,7 @@ func (c *ZentaoClient) UpdateBuild(token string, buildID string, reqBody *BuildR
 
 // GetBuild 获取版本详情
 func (c *ZentaoClient) GetBuild(token string, buildID string) (*Build, error) {
-	url := fmt.Sprintf("%s/api.php/v1/builds/%s", c.baseURL, buildID)
+	url := fmt.Sprintf("%s%s/builds/%s", c.baseURL, apiPrefix, buildID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -836,7 +839,7 @@ func (c *ZentaoClient) GetBuild(token string, buildID string) (*Build, error) {
 
 // GetBuilds 获取项目版本列表
 func (c *ZentaoClient) GetBuilds(token string, projectID string) (*BuildListResponse, error) {
-	url := fmt.Sprintf("%s/api.php/v1/projects/%s/builds", c.baseURL, projectID)
+	url := fmt.Sprintf("%s%s/projects/%s/builds", c.baseURL, apiPrefix, projectID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -949,7 +952,7 @@ type StoryListResponse struct {
 
 // CreateStory 创建需求
 func (c *ZentaoClient) CreateStory(token string, reqBody *StoryRequest) (*Story, error) {
-	url := fmt.Sprintf("%s/api.php/v1/stories", c.baseURL)
+	url := fmt.Sprintf("%s%s/stories", c.baseURL, apiPrefix)
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -994,7 +997,7 @@ func (c *ZentaoClient) CreateStory(token string, reqBody *StoryRequest) (*Story,
 
 // GetStory 获取需求详情
 func (c *ZentaoClient) GetStory(token string, storyID string) (*Story, error) {
-	url := fmt.Sprintf("%s/api.php/v1/stories/%s", c.baseURL, storyID)
+	url := fmt.Sprintf("%s%s/stories/%s", c.baseURL, apiPrefix, storyID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -1033,7 +1036,7 @@ func (c *ZentaoClient) GetStory(token string, storyID string) (*Story, error) {
 
 // GetProjectStories 获取项目需求列表
 func (c *ZentaoClient) GetProjectStories(token string, projectID string) (*StoryListResponse, error) {
-	url := fmt.Sprintf("%s/api.php/v1/projects/%s/stories", c.baseURL, projectID)
+	url := fmt.Sprintf("%s%s/projects/%s/stories", c.baseURL, apiPrefix, projectID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -1072,7 +1075,7 @@ func (c *ZentaoClient) GetProjectStories(token string, projectID string) (*Story
 
 // GetProductStories 获取产品需求列表
 func (c *ZentaoClient) GetProductStories(token string, productID string) (*StoryListResponse, error) {
-	url := fmt.Sprintf("%s/api.php/v1/products/%s/stories", c.baseURL, productID)
+	url := fmt.Sprintf("%s%s/products/%s/stories", c.baseURL, apiPrefix, productID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -1111,7 +1114,7 @@ func (c *ZentaoClient) GetProductStories(token string, productID string) (*Story
 
 // GetExecutionStories 获取执行需求列表
 func (c *ZentaoClient) GetExecutionStories(token string, executionID string) (*StoryListResponse, error) {
-	url := fmt.Sprintf("%s/api.php/v1/executions/%s/stories", c.baseURL, executionID)
+	url := fmt.Sprintf("%s%s/executions/%s/stories", c.baseURL, apiPrefix, executionID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
