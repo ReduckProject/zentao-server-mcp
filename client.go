@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -1148,47 +1150,28 @@ func (c *ZentaoClient) GetExecutionStories(token string, executionID string) (*S
 	return &storyList, nil
 }
 
-// AddBugCommentRequest 添加Bug备注请求
-type AddBugCommentRequest struct {
-	Comment string `json:"comment"`
-}
-
-// AddBugCommentResponse 添加Bug备注响应
-type AddBugCommentResponse struct {
-	ID      interface{} `json:"id"`
-	ObjectType string      `json:"objectType"`
-	ObjectID   interface{} `json:"objectID"`
-	Product    interface{} `json:"product"`
-	Project    interface{} `json:"project"`
-	Execution  interface{} `json:"execution"`
-	Actor      string      `json:"actor"`
-	Action     string      `json:"action"`
-	Date       string      `json:"date"`
-	Comment    string      `json:"comment"`
-	Extra      string      `json:"extra"`
-	Read       string      `json:"read"`
-	Vision     string      `json:"vision"`
-	Efforted   string      `json:"efforted"`
-}
-
-// AddBugComment 给Bug添加备注
-func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string) (*AddBugCommentResponse, error) {
-	url := fmt.Sprintf("%s/bugs/%s/comments", c.baseURL, bugID)
-
-	reqBody := map[string]string{
-		"comment": comment,
-	}
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("JSON编码失败: %w", err)
+// AddBugComment 给Bug添加备注（使用表单接口）
+func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string) (map[string]interface{}, error) {
+	// 从 REST API 的 baseURL 提取 web 基础地址
+	// 例如: http://host/zentao/api.php/v1 -> http://host/zentao
+	webBaseURL := c.baseURL
+	if idx := findStr(webBaseURL, "/api.php"); idx > 0 {
+		webBaseURL = webBaseURL[:idx]
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	url := fmt.Sprintf("%s/action-comment-bug-%s.html", webBaseURL, bugID)
+
+	// 构建表单数据
+	formData := urlValues{
+		"actioncomment": []string{fmt.Sprintf("<p><span>%s</span></p>", comment)},
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBufferString(formData.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Token", token)
 
 	resp, err := c.httpClient.Do(req)
@@ -1202,19 +1185,46 @@ func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string)
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 
-	var errResp ErrorResponse
-	if json.Unmarshal(body, &errResp) == nil && errResp.Error != "" {
-		return nil, fmt.Errorf("API错误: %s", errResp.Error)
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusFound {
 		return nil, fmt.Errorf("API返回错误状态码 %d: %s", resp.StatusCode, string(body))
 	}
 
-	var result AddBugCommentResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("解析响应失败: %w", err)
-	}
+	return map[string]interface{}{
+		"success": true,
+		"message": "备注添加成功",
+		"bug_id":  bugID,
+	}, nil
+}
 
-	return &result, nil
+// urlValues 简单的 URL 编码表单数据
+type urlValues map[string][]string
+
+func (v urlValues) Encode() string {
+	var buf bytes.Buffer
+	first := true
+	for key, values := range v {
+		for _, value := range values {
+			if !first {
+				buf.WriteByte('&')
+			}
+			first = false
+			buf.WriteString(urlEncode(key))
+			buf.WriteByte('=')
+			buf.WriteString(urlEncode(value))
+		}
+	}
+	return buf.String()
+}
+
+func urlEncode(s string) string {
+	return strings.ReplaceAll(url.QueryEscape(s), "+", "%20")
+}
+
+func findStr(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }
