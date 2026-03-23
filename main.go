@@ -448,6 +448,19 @@ func main() {
 		),
 	)
 
+	// 给Bug添加备注
+	addBugCommentTool := mcp.NewTool("add_bug_comment",
+		mcp.WithDescription("给Bug添加备注"),
+		mcp.WithString("bug_id",
+			mcp.Required(),
+			mcp.Description("Bug ID"),
+		),
+		mcp.WithString("comment",
+			mcp.Required(),
+			mcp.Description("备注内容"),
+		),
+	)
+
 	s.AddTool(configureTool, configureHandler)
 	s.AddTool(getTokenTool, getTokenHandler)
 	s.AddTool(refreshTokenTool, refreshTokenHandler)
@@ -468,6 +481,7 @@ func main() {
 	s.AddTool(getProjectStoriesTool, getProjectStoriesHandler)
 	s.AddTool(getProductStoriesTool, getProductStoriesHandler)
 	s.AddTool(getExecutionStoriesTool, getExecutionStoriesHandler)
+	s.AddTool(addBugCommentTool, addBugCommentHandler)
 
 	if err := server.ServeStdio(s); err != nil {
 		log.Fatalf("Server error: %v", err)
@@ -1569,6 +1583,47 @@ func getExecutionStoriesHandler(ctx context.Context, request mcp.CallToolRequest
 	data, err := toJSON(stories)
 	if err != nil {
 		return errorResult(fmt.Sprintf("序列化需求列表失败: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(data), nil
+}
+
+func addBugCommentHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if !globalTokenManager.IsConfigured() {
+		return errorResult("禅道未配置，请先调用 configure 工具设置服务器地址和账号密码"), nil
+	}
+
+	bugID, ok := request.Params.Arguments["bug_id"].(string)
+	if !ok {
+		return errorResult("bug_id is required"), nil
+	}
+
+	comment, ok := request.Params.Arguments["comment"].(string)
+	if !ok {
+		return errorResult("comment is required"), nil
+	}
+
+	token, err := globalTokenManager.GetToken()
+	if err != nil {
+		return errorResult(fmt.Sprintf("获取Token失败: %v", err)), nil
+	}
+
+	client := NewZentaoClient(globalTokenManager.GetConfig().BaseURL)
+	result, err := client.AddBugComment(token, bugID, comment)
+	if err != nil {
+		token, refreshErr := globalTokenManager.RefreshToken()
+		if refreshErr != nil {
+			return errorResult(fmt.Sprintf("刷新Token失败: %v", refreshErr)), nil
+		}
+		result, err = client.AddBugComment(token, bugID, comment)
+		if err != nil {
+			return errorResult(fmt.Sprintf("添加备注失败: %v", err)), nil
+		}
+	}
+
+	data, err := toJSON(result)
+	if err != nil {
+		return errorResult(fmt.Sprintf("序列化响应失败: %v", err)), nil
 	}
 
 	return mcp.NewToolResultText(data), nil

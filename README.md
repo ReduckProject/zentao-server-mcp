@@ -65,6 +65,7 @@ go build -o zentao-mcp .
 | `update_bug` | 修改 Bug |
 | `get_bugs` | 获取产品 Bug 列表 |
 | `get_bug` | 获取 Bug 详情 |
+| `add_bug_comment` | 给 Bug 添加备注 |
 
 ### 版本管理
 

@@ -1147,3 +1147,74 @@ func (c *ZentaoClient) GetExecutionStories(token string, executionID string) (*S
 
 	return &storyList, nil
 }
+
+// AddBugCommentRequest 添加Bug备注请求
+type AddBugCommentRequest struct {
+	Comment string `json:"comment"`
+}
+
+// AddBugCommentResponse 添加Bug备注响应
+type AddBugCommentResponse struct {
+	ID      interface{} `json:"id"`
+	ObjectType string      `json:"objectType"`
+	ObjectID   interface{} `json:"objectID"`
+	Product    interface{} `json:"product"`
+	Project    interface{} `json:"project"`
+	Execution  interface{} `json:"execution"`
+	Actor      string      `json:"actor"`
+	Action     string      `json:"action"`
+	Date       string      `json:"date"`
+	Comment    string      `json:"comment"`
+	Extra      string      `json:"extra"`
+	Read       string      `json:"read"`
+	Vision     string      `json:"vision"`
+	Efforted   string      `json:"efforted"`
+}
+
+// AddBugComment 给Bug添加备注
+func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string) (*AddBugCommentResponse, error) {
+	url := fmt.Sprintf("%s/bugs/%s/comments", c.baseURL, bugID)
+
+	reqBody := map[string]string{
+		"comment": comment,
+	}
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("JSON编码失败: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("Token", token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	var errResp ErrorResponse
+	if json.Unmarshal(body, &errResp) == nil && errResp.Error != "" {
+		return nil, fmt.Errorf("API错误: %s", errResp.Error)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("API返回错误状态码 %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result AddBugCommentResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	return &result, nil
+}
