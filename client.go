@@ -1520,3 +1520,75 @@ func (c *ZentaoClient) GetUserProfile(token string) (*UserProfileResponse, error
 
 	return &result, nil
 }
+
+// GetTodayDynamic 获取今日动态
+func (c *ZentaoClient) GetTodayDynamic(userID string) (map[string]interface{}, error) {
+	// 从 REST API 的 baseURL 提取 web 基础地址
+	webBaseURL := c.baseURL
+	if idx := findStr(webBaseURL, "/api.php"); idx > 0 {
+		webBaseURL = webBaseURL[:idx]
+	}
+
+	// 登录获取 session
+	jar, _ := cookiejar.New(nil)
+	sessionClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Jar:     jar,
+	}
+
+	if err := c.loginForSessionWithClient(webBaseURL, sessionClient); err != nil {
+		return nil, fmt.Errorf("登录失败: %w", err)
+	}
+
+	// 构建URL: /company-dynamic-today--0--no-{userID}-0-0-0.json
+	apiURL := fmt.Sprintf("%s/company-dynamic-today--0--no-%s-0-0-0.json", webBaseURL, userID)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+
+	resp, err := sessionClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API返回错误状态码 %d: %s", resp.StatusCode, string(body))
+	}
+
+	// 解析响应
+	var result struct {
+		Status string `json:"status"`
+		Data   string `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	if result.Status != "success" {
+		return nil, fmt.Errorf("获取动态失败: %s", result.Data)
+	}
+
+	// 如果 data 为空，返回空对象
+	if result.Data == "" {
+		return map[string]interface{}{}, nil
+	}
+
+	// 解析 data 字段
+	var dynamics map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Data), &dynamics); err != nil {
+		return nil, fmt.Errorf("解析动态数据失败: %w", err)
+	}
+
+	return dynamics, nil
+}

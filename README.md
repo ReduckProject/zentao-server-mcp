@@ -75,6 +75,7 @@ go build -o zentao-mcp .
 | `refresh_token` | 强制刷新 Token（忽略缓存） |
 | `token_status` | 查看当前 Token 状态和配置信息 |
 | `get_profile` | 获取当前登录用户的个人信息 |
+| `get_today_dynamic` | 获取当前用户的今日动态 |
 
 ### 产品管理
 

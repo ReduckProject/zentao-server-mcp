@@ -92,6 +92,11 @@ func main() {
 		mcp.WithDescription("获取当前登录用户的个人信息"),
 	)
 
+	// 获取今日动态
+	getTodayDynamicTool := mcp.NewTool("get_today_dynamic",
+		mcp.WithDescription("获取当前用户的今日动态"),
+	)
+
 	// 获取产品列表
 	getProductsTool := mcp.NewTool("get_products",
 		mcp.WithDescription("获取禅道产品列表"),
@@ -506,6 +511,7 @@ func main() {
 	s.AddTool(refreshTokenTool, refreshTokenHandler)
 	s.AddTool(tokenStatusTool, tokenStatusHandler)
 	s.AddTool(getProfileTool, getProfileHandler)
+	s.AddTool(getTodayDynamicTool, getTodayDynamicHandler)
 	s.AddTool(getProductsTool, getProductsHandler)
 	s.AddTool(getProductTool, getProductHandler)
 	s.AddTool(createProductTool, createProductHandler)
@@ -649,6 +655,47 @@ func getProfileHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	data, err := toJSON(profile)
 	if err != nil {
 		return errorResult(fmt.Sprintf("序列化用户信息失败: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(data), nil
+}
+
+func getTodayDynamicHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if !globalTokenManager.IsConfigured() {
+		return errorResult("禅道未配置，请先调用 configure 工具设置服务器地址和账号密码"), nil
+	}
+
+	token, err := globalTokenManager.GetToken()
+	if err != nil {
+		return errorResult(fmt.Sprintf("获取Token失败: %v", err)), nil
+	}
+
+	// 先获取用户信息以获取用户ID
+	client := NewZentaoClient(globalTokenManager.GetConfig().BaseURL)
+	profile, err := client.GetUserProfile(token)
+	if err != nil {
+		token, refreshErr := globalTokenManager.RefreshToken()
+		if refreshErr != nil {
+			return errorResult(fmt.Sprintf("刷新Token失败: %v", refreshErr)), nil
+		}
+		profile, err = client.GetUserProfile(token)
+		if err != nil {
+			return errorResult(fmt.Sprintf("获取用户信息失败: %v", err)), nil
+		}
+	}
+
+	userID := fmt.Sprintf("%v", profile.Profile.ID)
+	dynamics, err := client.GetTodayDynamic(userID)
+	if err != nil {
+		return errorResult(fmt.Sprintf("获取今日动态失败: %v", err)), nil
+	}
+
+	data, err := toJSON(map[string]interface{}{
+		"user_id":  userID,
+		"dynamic":  dynamics,
+	})
+	if err != nil {
+		return errorResult(fmt.Sprintf("序列化动态数据失败: %v", err)), nil
 	}
 
 	return mcp.NewToolResultText(data), nil
