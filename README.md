@@ -18,6 +18,18 @@
 go build -o zentao-mcp .
 ```
 
+## 使用
+
+```bash
+# 使用默认配置文件（exe所在目录的zentao_config.json）
+./zentao-mcp
+
+# 指定配置文件路径
+./zentao-mcp -c /path/to/config.json
+# 或
+./zentao-mcp -config /path/to/config.json
+```
+
 ## 配置
 
 ### Claude Desktop 配置

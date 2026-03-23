@@ -35,17 +35,27 @@ type TokenManager struct {
 
 // NewTokenManager 创建Token管理器
 func NewTokenManager() *TokenManager {
-	// 获取可执行文件所在目录
-	execPath, err := os.Executable()
-	if err != nil {
-		execPath, _ = os.Getwd()
-	}
-	configDir := filepath.Dir(execPath)
-	configPath := filepath.Join(configDir, "zentao_config.json")
+	return &TokenManager{}
+}
 
-	return &TokenManager{
-		configPath: configPath,
+// SetConfigPath 设置配置文件路径
+func (tm *TokenManager) SetConfigPath(configPath string) {
+	if configPath != "" {
+		tm.configPath = configPath
+	} else {
+		// 未指定则使用 exe 所在目录
+		execPath, err := os.Executable()
+		if err != nil {
+			execPath, _ = os.Getwd()
+		}
+		configDir := filepath.Dir(execPath)
+		tm.configPath = filepath.Join(configDir, "zentao_config.json")
 	}
+}
+
+// GetConfigPath 获取配置文件路径
+func (tm *TokenManager) GetConfigPath() string {
+	return tm.configPath
 }
 
 // LoadConfig 加载配置
@@ -72,7 +82,7 @@ func (tm *TokenManager) LoadConfig() error {
 func (tm *TokenManager) SaveConfig(config *Config) error {
 	tm.config = config
 	if tm.config.TokenExpiry <= 0 {
-		tm.config.TokenExpiry = 24
+		tm.config.TokenExpiry = 86400
 	}
 
 	data, err := json.MarshalIndent(tm.config, "", "  ")

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 
@@ -11,10 +12,26 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// 命令行参数
+var configPath string
+
+func init() {
+	flag.StringVar(&configPath, "config", "", "配置文件路径（不指定则使用exe所在目录的zentao_config.json）")
+	flag.StringVar(&configPath, "c", "", "配置文件路径（简写）")
+}
+
 func main() {
+	// 解析命令行参数
+	flag.Parse()
+
+	// 设置配置文件路径
+	globalTokenManager.SetConfigPath(configPath)
+
 	// 尝试加载已有配置
 	if err := globalTokenManager.LoadConfig(); err != nil {
 		log.Printf("加载配置文件失败（如果是首次使用，请先配置）: %v", err)
+	} else {
+		log.Printf("使用配置文件: %s", globalTokenManager.GetConfigPath())
 	}
 
 	// 如果已配置，启动时自动获取token
