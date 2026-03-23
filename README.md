@@ -91,6 +91,7 @@ go build -o zentao-mcp .
 | `update_bug` | 修改 Bug |
 | `get_bugs` | 获取产品 Bug 列表 |
 | `get_bug` | 获取 Bug 详情 |
+| `get_bug_comments` | 获取 Bug 备注列表 |
 | `add_bug_comment` | 给 Bug 添加备注 |
 
 ### 版本管理
@@ -158,7 +159,14 @@ go build -o zentao-mcp .
 - full: true/false (是否返回完整参数)
 ```
 
-### 5. 获取产品列表
+### 5. 获取 Bug 备注
+
+```
+调用 get_bug_comments 工具:
+- bug_id: Bug ID
+```
+
+### 6. 获取产品列表
 
 ```
 调用 get_products 工具:

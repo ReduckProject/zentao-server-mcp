@@ -285,6 +285,15 @@ func main() {
 		),
 	)
 
+	// 获取Bug备注
+	getBugCommentsTool := mcp.NewTool("get_bug_comments",
+		mcp.WithDescription("获取Bug备注列表"),
+		mcp.WithString("bug_id",
+			mcp.Required(),
+			mcp.Description("Bug ID"),
+		),
+	)
+
 	// 创建版本
 	createBuildTool := mcp.NewTool("create_build",
 		mcp.WithDescription("创建版本"),
@@ -498,6 +507,7 @@ func main() {
 	s.AddTool(updateBugTool, updateBugHandler)
 	s.AddTool(getBugsTool, getBugsHandler)
 	s.AddTool(getBugTool, getBugHandler)
+	s.AddTool(getBugCommentsTool, getBugCommentsHandler)
 	s.AddTool(createBuildTool, createBuildHandler)
 	s.AddTool(updateBuildTool, updateBuildHandler)
 	s.AddTool(getBuildTool, getBuildHandler)
@@ -1075,6 +1085,34 @@ func getBugHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	data, err := toJSON(bug)
 	if err != nil {
 		return errorResult(fmt.Sprintf("序列化Bug详情失败: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(data), nil
+}
+
+func getBugCommentsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if !globalTokenManager.IsConfigured() {
+		return errorResult("禅道未配置，请先调用 configure 工具设置服务器地址和账号密码"), nil
+	}
+
+	bugID, ok := request.Params.Arguments["bug_id"].(string)
+	if !ok {
+		return errorResult("bug_id is required"), nil
+	}
+
+	client := NewZentaoClient(globalTokenManager.GetConfig().BaseURL)
+	comments, err := client.GetBugComments(bugID)
+	if err != nil {
+		return errorResult(fmt.Sprintf("获取Bug备注失败: %v", err)), nil
+	}
+
+	data, err := toJSON(map[string]interface{}{
+		"bug_id":   bugID,
+		"comments": comments,
+		"total":    len(comments),
+	})
+	if err != nil {
+		return errorResult(fmt.Sprintf("序列化备注列表失败: %v", err)), nil
 	}
 
 	return mcp.NewToolResultText(data), nil

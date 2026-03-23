@@ -1350,3 +1350,114 @@ func findStr(s, substr string) int {
 	}
 	return -1
 }
+
+// GetBugComments 获取Bug备注
+func (c *ZentaoClient) GetBugComments(bugID string) ([]map[string]interface{}, error) {
+	// 从 REST API 的 baseURL 提取 web 基础地址
+	webBaseURL := c.baseURL
+	if idx := findStr(webBaseURL, "/api.php"); idx > 0 {
+		webBaseURL = webBaseURL[:idx]
+	}
+
+	// 登录获取 session
+	jar, _ := cookiejar.New(nil)
+	sessionClient := &http.Client{
+		Timeout: 30 * time.Second,
+		Jar:     jar,
+	}
+
+	if err := c.loginForSessionWithClient(webBaseURL, sessionClient); err != nil {
+		return nil, fmt.Errorf("登录失败: %w", err)
+	}
+
+	apiURL := fmt.Sprintf("%s/bug-view-%s.json", webBaseURL, bugID)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+
+	resp, err := sessionClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API返回错误状态码 %d: %s", resp.StatusCode, string(body))
+	}
+
+	// 解析响应
+	var result struct {
+		Status string `json:"status"`
+		Data   string `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	if result.Status != "success" {
+		return nil, fmt.Errorf("获取Bug详情失败: %s", result.Data)
+	}
+
+	// 解析 data 字段（嵌套的 JSON）
+	// actions 是一个 map[string]Action
+	var bugDetail struct {
+		Actions map[string]struct {
+			ID      interface{} `json:"id"`
+			Action  string      `json:"action"`
+			Comment string      `json:"comment"`
+			Date    string      `json:"date"`
+			Actor   string      `json:"actor"`
+		} `json:"actions"`
+	}
+	if err := json.Unmarshal([]byte(result.Data), &bugDetail); err != nil {
+		return nil, fmt.Errorf("解析Bug详情失败: %w", err)
+	}
+
+	// 只返回有备注的记录
+	var comments []map[string]interface{}
+	for _, action := range bugDetail.Actions {
+		if action.Comment != "" {
+			// 清理 HTML 标签
+			content := stripHTMLTags(action.Comment)
+			comments = append(comments, map[string]interface{}{
+				"id":      action.ID,
+				"content": content,
+				"date":    action.Date,
+				"user":    action.Actor,
+			})
+		}
+	}
+
+	return comments, nil
+}
+
+// stripHTMLTags 移除 HTML 标签
+func stripHTMLTags(s string) string {
+	// 简单移除 HTML 标签
+	var result bytes.Buffer
+	inTag := false
+	for _, r := range s {
+		if r == '<' {
+			inTag = true
+			continue
+		}
+		if r == '>' {
+			inTag = false
+			continue
+		}
+		if !inTag {
+			result.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(result.String())
+}
