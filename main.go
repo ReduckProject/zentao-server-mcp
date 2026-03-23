@@ -262,6 +262,15 @@ func main() {
 		mcp.WithString("product_id",
 			mcp.Description("产品ID或名称（不传则使用默认产品）"),
 		),
+		mcp.WithString("status",
+			mcp.Description("Bug状态: assigntome(我的bug) | all(所有包括关闭的) | 不传默认未关闭的"),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("每页数量，默认20"),
+		),
+		mcp.WithNumber("page",
+			mcp.Description("页码，从1开始"),
+		),
 		mcp.WithBoolean("full",
 			mcp.Description("是否返回完整参数，默认false返回精简参数"),
 		),
@@ -970,6 +979,18 @@ func getBugsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 
 	full := request.Params.Arguments["full"] == true
 
+	// 解析可选参数
+	var opts GetBugsOptions
+	if status, ok := request.Params.Arguments["status"].(string); ok {
+		opts.Status = status
+	}
+	if limit, ok := request.Params.Arguments["limit"].(float64); ok {
+		opts.Limit = int(limit)
+	}
+	if page, ok := request.Params.Arguments["page"].(float64); ok {
+		opts.Page = int(page)
+	}
+
 	token, err := globalTokenManager.GetToken()
 	if err != nil {
 		return errorResult(fmt.Sprintf("获取Token失败: %v", err)), nil
@@ -983,14 +1004,14 @@ func getBugsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 	}
 
 	client := NewZentaoClient(globalTokenManager.GetConfig().BaseURL)
-	bugs, err := client.GetBugs(token, productID)
+	bugs, err := client.GetBugs(token, productID, &opts)
 	if err != nil {
 		// Token可能过期，尝试刷新后重试
 		token, refreshErr := globalTokenManager.RefreshToken()
 		if refreshErr != nil {
 			return errorResult(fmt.Sprintf("刷新Token失败: %v", refreshErr)), nil
 		}
-		bugs, err = client.GetBugs(token, productID)
+		bugs, err = client.GetBugs(token, productID, &opts)
 		if err != nil {
 			return errorResult(fmt.Sprintf("获取Bug列表失败: %v", err)), nil
 		}

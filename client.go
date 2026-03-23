@@ -587,11 +587,36 @@ func (c *ZentaoClient) UpdateBug(token string, bugID string, reqBody *BugRequest
 
 	return &bug, nil
 }
-// GetBugs 获取产品Bug列表
-func (c *ZentaoClient) GetBugs(token string, productID string) (*BugListResponse, error) {
-	url := fmt.Sprintf("%s/products/%s/bugs", c.baseURL, productID)
 
-	req, err := http.NewRequest("GET", url, nil)
+// GetBugsOptions 获取Bug列表的选项
+type GetBugsOptions struct {
+	Status  string // assigntome: 我的bug, all: 所有包括关闭的, 空: 未关闭的
+	Limit   int    // 每页数量
+	Page    int    // 页码
+}
+
+// GetBugs 获取产品Bug列表
+func (c *ZentaoClient) GetBugs(token string, productID string, opts *GetBugsOptions) (*BugListResponse, error) {
+	apiURL := fmt.Sprintf("%s/products/%s/bugs", c.baseURL, productID)
+
+	// 构建查询参数
+	if opts != nil {
+		params := url.Values{}
+		if opts.Status != "" {
+			params.Set("status", opts.Status)
+		}
+		if opts.Limit > 0 {
+			params.Set("limit", fmt.Sprintf("%d", opts.Limit))
+		}
+		if opts.Page > 0 {
+			params.Set("page", fmt.Sprintf("%d", opts.Page))
+		}
+		if len(params) > 0 {
+			apiURL = apiURL + "?" + params.Encode()
+		}
+	}
+
+	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}

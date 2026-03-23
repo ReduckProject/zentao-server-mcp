@@ -57,7 +57,7 @@ go build -o zentao-mcp .
 {
   "mcpServers": {
     "zentao": {
-      "command": "path/to/zentao-mcp.exe",
+      "command": "zentao-mcp.exe",
       "args": ["-c", "/path/to/zentao_config.json"]
     }
   }
