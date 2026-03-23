@@ -91,7 +91,7 @@ go build -o zentao-mcp .
 
 ```
 调用 configure 工具:
-- base_url: http://your-zentao-server/zentao (禅道服务地址，无需包含 /api.php/v1)
+- base_url: http://your-zentao-server/zentao/api.php/v1 (禅道API地址)
 - account: your_account
 - password: your_password
 - token_expiry: 86400 (可选，默认86400秒即24小时)

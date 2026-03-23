@@ -37,7 +37,7 @@ func main() {
 		mcp.WithDescription("配置禅道服务器连接信息（首次使用或修改配置时调用）"),
 		mcp.WithString("base_url",
 			mcp.Required(),
-			mcp.Description("禅道服务器地址，例如: http://localhost:8080/zentao (无需包含 /api.php/v1)"),
+			mcp.Description("禅道API地址，例如: http://localhost:8080/zentao/api.php/v1"),
 		),
 		mcp.WithString("account",
 			mcp.Required(),
