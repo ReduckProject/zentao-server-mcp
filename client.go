@@ -303,7 +303,7 @@ type Bug struct {
 	PlanName       interface{} `json:"planName"`
 	ProjectName    string      `json:"projectName"`
 	ToCases        []string    `json:"toCases"`
-	Files          []string    `json:"files"`
+	Files          interface{} `json:"files"`
 }
 
 // ZentaoClient 禅道客户端
