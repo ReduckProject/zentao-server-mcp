@@ -1441,6 +1441,336 @@ func (c *ZentaoClient) GetBugComments(bugID string) ([]map[string]interface{}, e
 	return comments, nil
 }
 
+// TestCaseStep 用例步骤
+type TestCaseStep struct {
+	ID      interface{} `json:"id"`
+	Parent  interface{} `json:"parent"`
+	Case    interface{} `json:"case"`
+	Version interface{} `json:"version"`
+	Type    string      `json:"type"`
+	Desc    string      `json:"desc"`
+	Expect  string      `json:"expect"`
+}
+
+// TestCaseListItem 用例列表项
+type TestCaseListItem struct {
+	ID             interface{} `json:"id"`
+	Project        interface{} `json:"project"`
+	Product        interface{} `json:"product"`
+	Execution      interface{} `json:"execution"`
+	Branch         interface{} `json:"branch"`
+	Lib            interface{} `json:"lib"`
+	Module         interface{} `json:"module"`
+	Path           interface{} `json:"path"`
+	Story          interface{} `json:"story"`
+	StoryVersion   interface{} `json:"storyVersion"`
+	Title          string      `json:"title"`
+	Precondition   string      `json:"precondition"`
+	Keywords       string      `json:"keywords"`
+	Pri            interface{} `json:"pri"`
+	Type           string      `json:"type"`
+	Auto           string      `json:"auto"`
+	Frame          string      `json:"frame"`
+	Stage          string      `json:"stage"`
+	HowRun         string      `json:"howRun"`
+	ScriptedBy     string      `json:"scriptedBy"`
+	ScriptedDate   interface{} `json:"scriptedDate"`
+	ScriptStatus   string      `json:"scriptStatus"`
+	ScriptLocation string      `json:"scriptLocation"`
+	Status         string      `json:"status"`
+	SubStatus      string      `json:"subStatus"`
+	Color          string      `json:"color"`
+	Frequency      string      `json:"frequency"`
+	Order          interface{} `json:"order"`
+	OpenedBy       *User       `json:"openedBy,omitempty"`
+	OpenedDate     string      `json:"openedDate"`
+	ReviewedBy     interface{} `json:"reviewedBy"`
+	ReviewedDate   interface{} `json:"reviewedDate"`
+	LastEditedBy   interface{} `json:"lastEditedBy"`
+	LastEditedDate interface{} `json:"lastEditedDate"`
+	Version        interface{} `json:"version"`
+	LinkCase       string      `json:"linkCase"`
+	FromBug        interface{} `json:"fromBug"`
+	FromCaseID     interface{} `json:"fromCaseID"`
+	FromCaseVersion interface{} `json:"fromCaseVersion"`
+	Deleted        interface{} `json:"deleted"`
+	LastRunner     string      `json:"lastRunner"`
+	LastRunDate    interface{} `json:"lastRunDate"`
+	LastRunResult  string      `json:"lastRunResult"`
+	StoryTitle     interface{} `json:"storyTitle"`
+	Needconfirm    interface{} `json:"needconfirm"`
+	Bugs           interface{} `json:"bugs"`
+	Results        interface{} `json:"results"`
+	CaseFails      interface{} `json:"caseFails"`
+	StepNumber     interface{} `json:"stepNumber"`
+	StatusName     string      `json:"statusName"`
+}
+
+// TestCaseListResponse 用例列表响应
+type TestCaseListResponse struct {
+	Page      int               `json:"page"`
+	Total     int               `json:"total"`
+	Limit     int               `json:"limit"`
+	Testcases []TestCaseListItem `json:"testcases"`
+}
+
+// TestCase 用例详情
+type TestCase struct {
+	ID             interface{}    `json:"id"`
+	Project        interface{}    `json:"project"`
+	Product        interface{}    `json:"product"`
+	Execution      interface{}    `json:"execution"`
+	Branch         interface{}    `json:"branch"`
+	Lib            interface{}    `json:"lib"`
+	Module         interface{}    `json:"module"`
+	Path           interface{}    `json:"path"`
+	Story          interface{}    `json:"story"`
+	StoryVersion   interface{}    `json:"storyVersion"`
+	Title          string         `json:"title"`
+	Precondition   string         `json:"precondition"`
+	Keywords       string         `json:"keywords"`
+	Pri            interface{}    `json:"pri"`
+	Type           string         `json:"type"`
+	Auto           string         `json:"auto"`
+	Frame          string         `json:"frame"`
+	Stage          string         `json:"stage"`
+	HowRun         string         `json:"howRun"`
+	ScriptedBy     string         `json:"scriptedBy"`
+	ScriptedDate   interface{}    `json:"scriptedDate"`
+	ScriptStatus   string         `json:"scriptStatus"`
+	ScriptLocation string         `json:"scriptLocation"`
+	Status         string         `json:"status"`
+	SubStatus      string         `json:"subStatus"`
+	Color          string         `json:"color"`
+	Frequency      string         `json:"frequency"`
+	Order          interface{}    `json:"order"`
+	OpenedBy       *User          `json:"openedBy,omitempty"`
+	OpenedDate     string         `json:"openedDate"`
+	ReviewedBy     interface{}    `json:"reviewedBy"`
+	ReviewedDate   interface{}    `json:"reviewedDate"`
+	LastEditedBy   interface{}    `json:"lastEditedBy"`
+	LastEditedDate interface{}    `json:"lastEditedDate"`
+	Version        interface{}    `json:"version"`
+	LinkCase       string         `json:"linkCase"`
+	FromBug        interface{}    `json:"fromBug"`
+	FromCaseID     interface{}    `json:"fromCaseID"`
+	FromCaseVersion interface{}  `json:"fromCaseVersion"`
+	Deleted        interface{}    `json:"deleted"`
+	LastRunner     string         `json:"lastRunner"`
+	LastRunDate    interface{}    `json:"lastRunDate"`
+	LastRunResult  string         `json:"lastRunResult"`
+	StoryTitle     interface{}    `json:"storyTitle"`
+	Needconfirm    interface{}    `json:"needconfirm"`
+	ToBugs         []interface{}  `json:"toBugs"`
+	Steps          []TestCaseStep `json:"steps"`
+	Files          []interface{}  `json:"files"`
+	CurrentVersion interface{}    `json:"currentVersion"`
+	CaseFails      interface{}    `json:"caseFails"`
+}
+
+// TestCaseStepRequest 创建用例步骤请求
+type TestCaseStepRequest struct {
+	Desc   string `json:"desc"`
+	Expect string `json:"expect"`
+}
+
+// CreateTestCaseRequest 创建用例请求
+type CreateTestCaseRequest struct {
+	Branch       int                   `json:"branch,omitempty"`
+	Module       int                   `json:"module,omitempty"`
+	Story        int                   `json:"story,omitempty"`
+	Title        string                `json:"title"`
+	Type         string                `json:"type"`
+	Stage        string                `json:"stage,omitempty"`
+	Precondition string                `json:"precondition,omitempty"`
+	Pri          int                   `json:"pri,omitempty"`
+	Steps        []TestCaseStepRequest `json:"steps"`
+	Keywords     string                `json:"keywords,omitempty"`
+}
+
+// GetProductTestCases 获取产品用例列表，search 不为空时按标题或关键字过滤
+func (c *ZentaoClient) GetProductTestCases(token string, productID string, limit int, page int, search string) (*TestCaseListResponse, error) {
+	search = strings.TrimSpace(search)
+
+	// 无搜索关键词时，直接请求指定页
+	if search == "" {
+		return c.fetchProductTestCasesPage(token, productID, limit, page)
+	}
+
+	// 有搜索关键词时，逐页遍历过滤
+	var matched []TestCaseListItem
+	currentPage := 1
+	pageSize := 100 // 每页拉取多一些以减少请求次数
+	totalAll := 0
+
+	for {
+		resp, err := c.fetchProductTestCasesPage(token, productID, pageSize, currentPage)
+		if err != nil {
+			return nil, err
+		}
+		if totalAll == 0 {
+			totalAll = resp.Total
+		}
+		if len(resp.Testcases) == 0 {
+			break
+		}
+
+		for _, tc := range resp.Testcases {
+			if strings.Contains(strings.ToLower(tc.Title), strings.ToLower(search)) ||
+				strings.Contains(strings.ToLower(tc.Keywords), strings.ToLower(search)) {
+				matched = append(matched, tc)
+			}
+		}
+
+		// 已拉完所有页
+		if currentPage*pageSize >= resp.Total {
+			break
+		}
+		currentPage++
+	}
+
+	return &TestCaseListResponse{
+		Page:      page,
+		Total:     len(matched),
+		Limit:     limit,
+		Testcases: matched,
+	}, nil
+}
+
+// fetchProductTestCasesPage 请求单页用例列表
+func (c *ZentaoClient) fetchProductTestCasesPage(token string, productID string, limit int, page int) (*TestCaseListResponse, error) {
+	apiURL := fmt.Sprintf("%s/products/%s/testcases", c.baseURL, productID)
+
+	params := url.Values{}
+	if limit > 0 {
+		params.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	if page > 0 {
+		params.Set("page", fmt.Sprintf("%d", page))
+	}
+	if len(params) > 0 {
+		apiURL = apiURL + "?" + params.Encode()
+	}
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	req.Header.Set("Token", token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	var errResp ErrorResponse
+	if json.Unmarshal(body, &errResp) == nil && errResp.Error != "" {
+		return nil, fmt.Errorf("API错误: %s", errResp.Error)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("API返回错误状态码 %d: %s", resp.StatusCode, string(body))
+	}
+
+	var caseList TestCaseListResponse
+	if err := json.Unmarshal(body, &caseList); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	return &caseList, nil
+}
+
+// GetTestCase 获取用例详情
+func (c *ZentaoClient) GetTestCase(token string, caseID string) (*TestCase, error) {
+	apiURL := fmt.Sprintf("%s/testcases/%s", c.baseURL, caseID)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	req.Header.Set("Token", token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	var errResp ErrorResponse
+	if json.Unmarshal(body, &errResp) == nil && errResp.Error != "" {
+		return nil, fmt.Errorf("API错误: %s", errResp.Error)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("API返回错误状态码 %d: %s", resp.StatusCode, string(body))
+	}
+
+	var testcase TestCase
+	if err := json.Unmarshal(body, &testcase); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	return &testcase, nil
+}
+
+// CreateTestCase 创建用例
+func (c *ZentaoClient) CreateTestCase(token string, productID string, reqBody *CreateTestCaseRequest) (*TestCase, error) {
+	apiURL := fmt.Sprintf("%s/products/%s/testcases", c.baseURL, productID)
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("JSON编码失败: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("Token", token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %w", err)
+	}
+
+	var errResp ErrorResponse
+	if json.Unmarshal(body, &errResp) == nil && errResp.Error != "" {
+		return nil, fmt.Errorf("API错误: %s", errResp.Error)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("API返回错误状态码 %d: %s", resp.StatusCode, string(body))
+	}
+
+	var testcase TestCase
+	if err := json.Unmarshal(body, &testcase); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	return &testcase, nil
+}
+
 // stripHTMLTags 移除 HTML 标签
 func stripHTMLTags(s string) string {
 	// 简单移除 HTML 标签

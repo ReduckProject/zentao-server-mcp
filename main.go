@@ -496,6 +496,76 @@ func main() {
 		),
 	)
 
+	// 获取产品用例列表
+	getProductTestCasesTool := mcp.NewTool("get_product_testcases",
+		mcp.WithDescription("获取产品用例列表"),
+		mcp.WithString("product_id",
+			mcp.Description("产品ID或名称（不传则使用默认产品）"),
+		),
+		mcp.WithString("search",
+			mcp.Description("搜索关键词，按用例标题或关键字过滤"),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("每页数量，默认20"),
+		),
+		mcp.WithNumber("page",
+			mcp.Description("页码，从1开始"),
+		),
+		mcp.WithBoolean("full",
+			mcp.Description("是否返回完整参数，默认false返回精简参数"),
+		),
+	)
+
+	// 获取用例详情
+	getTestCaseTool := mcp.NewTool("get_testcase",
+		mcp.WithDescription("获取用例详情"),
+		mcp.WithString("id",
+			mcp.Required(),
+			mcp.Description("用例ID"),
+		),
+	)
+
+	// 创建用例
+	createTestCaseTool := mcp.NewTool("create_testcase",
+		mcp.WithDescription("创建用例"),
+		mcp.WithString("product_id",
+			mcp.Description("产品ID或名称（不传则使用默认产品）"),
+		),
+		mcp.WithString("title",
+			mcp.Required(),
+			mcp.Description("用例标题"),
+		),
+		mcp.WithString("type",
+			mcp.Required(),
+			mcp.Description("用例类型: feature(功能测试) | performance(性能测试) | config(配置相关) | install(安装部署) | security(安全相关) | interface(接口测试) | unit(单元测试) | other(其他)"),
+		),
+		mcp.WithArray("steps",
+			mcp.Required(),
+			mcp.Description("用例步骤数组，每个步骤为 {\"desc\": \"步骤描述\", \"expect\": \"期望结果\"}"),
+		),
+		mcp.WithNumber("pri",
+			mcp.Description("优先级(1-4)，默认1"),
+		),
+		mcp.WithString("stage",
+			mcp.Description("适用阶段: unittest(单元测试阶段) | feature(功能测试阶段) | intergrate(集成测试阶段) | system(系统测试阶段) | smoke(冒烟测试阶段) | bvt(版本验证阶段)"),
+		),
+		mcp.WithString("precondition",
+			mcp.Description("前置条件"),
+		),
+		mcp.WithNumber("branch",
+			mcp.Description("所属分支ID"),
+		),
+		mcp.WithNumber("module",
+			mcp.Description("所属模块ID"),
+		),
+		mcp.WithNumber("story",
+			mcp.Description("相关需求ID"),
+		),
+		mcp.WithString("keywords",
+			mcp.Description("关键词"),
+		),
+	)
+
 	// 给Bug添加备注
 	addBugCommentTool := mcp.NewTool("add_bug_comment",
 		mcp.WithDescription("给Bug添加备注"),
@@ -532,6 +602,9 @@ func main() {
 	s.AddTool(getProjectStoriesTool, getProjectStoriesHandler)
 	s.AddTool(getProductStoriesTool, getProductStoriesHandler)
 	s.AddTool(getExecutionStoriesTool, getExecutionStoriesHandler)
+	s.AddTool(getProductTestCasesTool, getProductTestCasesHandler)
+	s.AddTool(getTestCaseTool, getTestCaseHandler)
+	s.AddTool(createTestCaseTool, createTestCaseHandler)
 	s.AddTool(addBugCommentTool, addBugCommentHandler)
 
 	if err := server.ServeStdio(s); err != nil {
@@ -697,9 +770,9 @@ func getTodayDynamicHandler(ctx context.Context, request mcp.CallToolRequest) (*
 	}
 
 	data, err := toJSON(map[string]interface{}{
-		"user_id":     userID,
-		"time_range":  timeRange,
-		"dynamic":     dynamics,
+		"user_id":    userID,
+		"time_range": timeRange,
+		"dynamic":    dynamics,
 	})
 	if err != nil {
 		return errorResult(fmt.Sprintf("序列化动态数据失败: %v", err)), nil
@@ -1756,6 +1829,204 @@ func getExecutionStoriesHandler(ctx context.Context, request mcp.CallToolRequest
 	return mcp.NewToolResultText(data), nil
 }
 
+func getProductTestCasesHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if !globalTokenManager.IsConfigured() {
+		return errorResult("禅道未配置，请先调用 configure 工具设置服务器地址和账号密码"), nil
+	}
+
+	full := request.Params.Arguments["full"] == true
+
+	var limit, page int
+	if l, ok := request.Params.Arguments["limit"].(float64); ok {
+		limit = int(l)
+	}
+	if p, ok := request.Params.Arguments["page"].(float64); ok {
+		page = int(p)
+	}
+	search, _ := request.Params.Arguments["search"].(string)
+
+	token, err := globalTokenManager.GetToken()
+	if err != nil {
+		return errorResult(fmt.Sprintf("获取Token失败: %v", err)), nil
+	}
+
+	// 解析产品ID（支持ID、名称或使用默认产品）
+	productIDInput, _ := request.Params.Arguments["product_id"].(string)
+	productID, err := resolveProductID(productIDInput, token)
+	if err != nil {
+		return errorResult(err.Error()), nil
+	}
+
+	client := NewZentaoClient(globalTokenManager.GetConfig().BaseURL)
+	cases, err := client.GetProductTestCases(token, productID, limit, page, search)
+	if err != nil {
+		token, refreshErr := globalTokenManager.RefreshToken()
+		if refreshErr != nil {
+			return errorResult(fmt.Sprintf("刷新Token失败: %v", refreshErr)), nil
+		}
+		cases, err = client.GetProductTestCases(token, productID, limit, page, search)
+		if err != nil {
+			return errorResult(fmt.Sprintf("获取用例列表失败: %v", err)), nil
+		}
+	}
+
+	// 如果不需要完整参数，返回精简数据
+	if !full && cases.Testcases != nil {
+		simplified := make([]map[string]interface{}, len(cases.Testcases))
+		for i, tc := range cases.Testcases {
+			simplified[i] = simplifyTestCase(tc)
+		}
+		result := map[string]interface{}{
+			"page":      cases.Page,
+			"total":     cases.Total,
+			"testcases": simplified,
+		}
+		data, err := toJSON(result)
+		if err != nil {
+			return errorResult(fmt.Sprintf("序列化用例列表失败: %v", err)), nil
+		}
+		return mcp.NewToolResultText(data), nil
+	}
+
+	data, err := toJSON(cases)
+	if err != nil {
+		return errorResult(fmt.Sprintf("序列化用例列表失败: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(data), nil
+}
+
+func getTestCaseHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if !globalTokenManager.IsConfigured() {
+		return errorResult("禅道未配置，请先调用 configure 工具设置服务器地址和账号密码"), nil
+	}
+
+	caseID, ok := request.Params.Arguments["id"].(string)
+	if !ok {
+		return errorResult("id is required"), nil
+	}
+
+	token, err := globalTokenManager.GetToken()
+	if err != nil {
+		return errorResult(fmt.Sprintf("获取Token失败: %v", err)), nil
+	}
+
+	client := NewZentaoClient(globalTokenManager.GetConfig().BaseURL)
+	testcase, err := client.GetTestCase(token, caseID)
+	if err != nil {
+		token, refreshErr := globalTokenManager.RefreshToken()
+		if refreshErr != nil {
+			return errorResult(fmt.Sprintf("刷新Token失败: %v", refreshErr)), nil
+		}
+		testcase, err = client.GetTestCase(token, caseID)
+		if err != nil {
+			return errorResult(fmt.Sprintf("获取用例详情失败: %v", err)), nil
+		}
+	}
+
+	data, err := toJSON(testcase)
+	if err != nil {
+		return errorResult(fmt.Sprintf("序列化用例详情失败: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(data), nil
+}
+
+func createTestCaseHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if !globalTokenManager.IsConfigured() {
+		return errorResult("禅道未配置，请先调用 configure 工具设置服务器地址和账号密码"), nil
+	}
+
+	title, ok := request.Params.Arguments["title"].(string)
+	if !ok {
+		return errorResult("title is required"), nil
+	}
+
+	typeVal, ok := request.Params.Arguments["type"].(string)
+	if !ok {
+		return errorResult("type is required"), nil
+	}
+
+	// 解析步骤
+	stepsRaw, ok := request.Params.Arguments["steps"].([]interface{})
+	if !ok {
+		return errorResult("steps is required"), nil
+	}
+	var steps []TestCaseStepRequest
+	for _, s := range stepsRaw {
+		if stepMap, ok := s.(map[string]interface{}); ok {
+			step := TestCaseStepRequest{}
+			if desc, ok := stepMap["desc"].(string); ok {
+				step.Desc = desc
+			}
+			if expect, ok := stepMap["expect"].(string); ok {
+				step.Expect = expect
+			}
+			steps = append(steps, step)
+		}
+	}
+
+	reqBody := &CreateTestCaseRequest{
+		Title: title,
+		Type:  typeVal,
+		Steps: steps,
+	}
+
+	if pri, ok := request.Params.Arguments["pri"].(float64); ok {
+		reqBody.Pri = int(pri)
+	}
+	if stage, ok := request.Params.Arguments["stage"].(string); ok {
+		reqBody.Stage = stage
+	}
+	if precondition, ok := request.Params.Arguments["precondition"].(string); ok {
+		reqBody.Precondition = precondition
+	}
+	if branch, ok := request.Params.Arguments["branch"].(float64); ok {
+		reqBody.Branch = int(branch)
+	}
+	if module, ok := request.Params.Arguments["module"].(float64); ok {
+		reqBody.Module = int(module)
+	}
+	if story, ok := request.Params.Arguments["story"].(float64); ok {
+		reqBody.Story = int(story)
+	}
+	if keywords, ok := request.Params.Arguments["keywords"].(string); ok {
+		reqBody.Keywords = keywords
+	}
+
+	token, err := globalTokenManager.GetToken()
+	if err != nil {
+		return errorResult(fmt.Sprintf("获取Token失败: %v", err)), nil
+	}
+
+	// 解析产品ID（支持ID、名称或使用默认产品）
+	productIDInput, _ := request.Params.Arguments["product_id"].(string)
+	productID, err := resolveProductID(productIDInput, token)
+	if err != nil {
+		return errorResult(err.Error()), nil
+	}
+
+	client := NewZentaoClient(globalTokenManager.GetConfig().BaseURL)
+	testcase, err := client.CreateTestCase(token, productID, reqBody)
+	if err != nil {
+		token, refreshErr := globalTokenManager.RefreshToken()
+		if refreshErr != nil {
+			return errorResult(fmt.Sprintf("刷新Token失败: %v", refreshErr)), nil
+		}
+		testcase, err = client.CreateTestCase(token, productID, reqBody)
+		if err != nil {
+			return errorResult(fmt.Sprintf("创建用例失败: %v", err)), nil
+		}
+	}
+
+	data, err := toJSON(testcase)
+	if err != nil {
+		return errorResult(fmt.Sprintf("序列化用例信息失败: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(data), nil
+}
+
 func addBugCommentHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if !globalTokenManager.IsConfigured() {
 		return errorResult("禅道未配置，请先调用 configure 工具设置服务器地址和账号密码"), nil
@@ -1851,24 +2122,39 @@ func simplifyBug(b BugListItem) map[string]interface{} {
 // simplifyBuild 精简版本信息
 func simplifyBuild(b Build) map[string]interface{} {
 	return map[string]interface{}{
-		"id":       b.ID,
-		"name":     b.Name,
-		"date":     b.Date,
-		"builder":  b.Builder,
+		"id":          b.ID,
+		"name":        b.Name,
+		"date":        b.Date,
+		"builder":     b.Builder,
 		"productName": b.ProductName,
 	}
+}
+
+// simplifyTestCase 精简用例信息
+func simplifyTestCase(tc TestCaseListItem) map[string]interface{} {
+	result := map[string]interface{}{
+		"id":     tc.ID,
+		"title":  tc.Title,
+		"pri":    tc.Pri,
+		"type":   tc.Type,
+		"status": tc.Status,
+	}
+	if tc.OpenedBy != nil {
+		result["openedBy"] = tc.OpenedBy.Account
+	}
+	return result
 }
 
 // simplifyStory 精简需求信息
 func simplifyStory(s Story) map[string]interface{} {
 	result := map[string]interface{}{
-		"id":        s.ID,
-		"title":     s.Title,
-		"category":  s.Category,
-		"pri":       s.Pri,
-		"status":    s.Status,
-		"stage":     s.Stage,
-		"estimate":  s.Estimate,
+		"id":       s.ID,
+		"title":    s.Title,
+		"category": s.Category,
+		"pri":      s.Pri,
+		"status":   s.Status,
+		"stage":    s.Stage,
+		"estimate": s.Estimate,
 	}
 	if s.OpenedBy != nil {
 		if u, ok := s.OpenedBy.(map[string]interface{}); ok {
