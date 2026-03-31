@@ -115,6 +115,14 @@ go build -o zentao-mcp .
 | `get_product_stories` | 获取产品需求列表 |
 | `get_execution_stories` | 获取执行需求列表 |
 
+### 测试用例管理
+
+| 工具名称 | 描述 |
+|---------|------|
+| `get_product_testcases` | 获取产品用例列表 |
+| `get_testcase` | 获取用例详情 |
+| `create_testcase` | 创建用例 |
+
 ## 使用示例
 
 ### 1. 首次配置
@@ -210,6 +218,30 @@ go build -o zentao-mcp .
 | `experience` | 体验 |
 | `improve` | 改进 |
 | `other` | 其他 |
+
+### 测试用例类型
+
+| 类型 | 说明 |
+|-----|------|
+| `feature` | 功能测试 |
+| `performance` | 性能测试 |
+| `config` | 配置相关 |
+| `install` | 安装部署 |
+| `security` | 安全相关 |
+| `interface` | 接口测试 |
+| `unit` | 单元测试 |
+| `other` | 其他 |
+
+### 测试用例适用阶段
+
+| 阶段 | 说明 |
+|-----|------|
+| `unittest` | 单元测试阶段 |
+| `feature` | 功能测试阶段 |
+| `intergrate` | 集成测试阶段 |
+| `system` | 系统测试阶段 |
+| `smoke` | 冒烟测试阶段 |
+| `bvt` | 版本验证阶段 |
 
 ## 开发
 
