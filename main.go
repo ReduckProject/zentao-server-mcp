@@ -208,6 +208,7 @@ func main() {
 		),
 		mcp.WithArray("opened_build",
 			mcp.Description("影响版本(数组，如: [\"trunk\"])"),
+			mcp.Items(map[string]interface{}{"type": "string"}),
 		),
 	)
 
@@ -266,6 +267,7 @@ func main() {
 		),
 		mcp.WithArray("opened_build",
 			mcp.Description("影响版本(数组，如: [\"trunk\"])"),
+			mcp.Items(map[string]interface{}{"type": "string"}),
 		),
 	)
 
@@ -542,6 +544,13 @@ func main() {
 		mcp.WithArray("steps",
 			mcp.Required(),
 			mcp.Description("用例步骤数组，每个步骤为 {\"desc\": \"步骤描述\", \"expect\": \"期望结果\"}"),
+			mcp.Items(map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"desc":   map[string]interface{}{"type": "string"},
+					"expect": map[string]interface{}{"type": "string"},
+				},
+			}),
 		),
 		mcp.WithNumber("pri",
 			mcp.Description("优先级(1-4)，默认1"),
