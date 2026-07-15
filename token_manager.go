@@ -146,8 +146,8 @@ func (tm *TokenManager) RefreshToken() (string, error) {
 	return token, nil
 }
 
-// GetTokenInfo 获取Token信息
-func (tm *TokenManager) GetTokenInfo() map[string]interface{} {
+// GetConnectionStatus 获取不包含Token和密码的连接状态。
+func (tm *TokenManager) GetConnectionStatus() map[string]interface{} {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 

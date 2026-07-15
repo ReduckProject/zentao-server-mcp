@@ -3,13 +3,20 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	crand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -118,21 +125,21 @@ type CreateProductRequest struct {
 
 // CreateProductResponse 创建产品响应
 type CreateProductResponse struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Program      string         `json:"program"`
-	Code         string         `json:"code"`
-	Line         string         `json:"line"`
-	Type         string         `json:"type"`
-	Status       string         `json:"status"`
-	PO           interface{}    `json:"PO"`
-	QD           interface{}    `json:"QD"`
-	RD           interface{}    `json:"RD"`
-	ACL          string         `json:"acl"`
-	Whitelist    []interface{}  `json:"whitelist"`
-	CreatedBy    *User          `json:"createdBy"`
-	CreatedDate  string         `json:"createdDate"`
-	Desc         string         `json:"desc"`
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Program     string        `json:"program"`
+	Code        string        `json:"code"`
+	Line        string        `json:"line"`
+	Type        string        `json:"type"`
+	Status      string        `json:"status"`
+	PO          interface{}   `json:"PO"`
+	QD          interface{}   `json:"QD"`
+	RD          interface{}   `json:"RD"`
+	ACL         string        `json:"acl"`
+	Whitelist   []interface{} `json:"whitelist"`
+	CreatedBy   *User         `json:"createdBy"`
+	CreatedDate string        `json:"createdDate"`
+	Desc        string        `json:"desc"`
 }
 
 // ErrorResponse API错误响应
@@ -230,9 +237,9 @@ type BugListItem struct {
 
 // BugListResponse Bug列表响应
 type BugListResponse struct {
-	Page  int          `json:"page"`
-	Total int          `json:"total"`
-	Limit int          `json:"limit"`
+	Page  int           `json:"page"`
+	Total int           `json:"total"`
+	Limit int           `json:"limit"`
 	Bugs  []BugListItem `json:"bugs"`
 }
 
@@ -590,9 +597,9 @@ func (c *ZentaoClient) UpdateBug(token string, bugID string, reqBody *BugRequest
 
 // GetBugsOptions 获取Bug列表的选项
 type GetBugsOptions struct {
-	Status  string // assigntome: 我的bug, all: 所有包括关闭的, 空: 未关闭的
-	Limit   int    // 每页数量
-	Page    int    // 页码
+	Status string // assigntome: 我的bug, all: 所有包括关闭的, 空: 未关闭的
+	Limit  int    // 每页数量
+	Page   int    // 页码
 }
 
 // GetBugs 获取产品Bug列表
@@ -707,26 +714,26 @@ type BuildRequest struct {
 
 // Build 版本信息
 type Build struct {
-	ID            interface{}    `json:"id"`
-	Project       interface{}    `json:"project"`
-	Product       interface{}    `json:"product"`
-	Branch        interface{}    `json:"branch"`
-	Execution     interface{}    `json:"execution"`
-	Name          string         `json:"name"`
-	ScmPath       string         `json:"scmPath"`
-	FilePath      string         `json:"filePath"`
-	Date          string         `json:"date"`
-	Stories       interface{}    `json:"stories"`
-	Bugs          interface{}    `json:"bugs"`
-	Builder       interface{}    `json:"builder"`
-	Desc          string         `json:"desc"`
-	Deleted       interface{}    `json:"deleted"`
-	ExecutionName string         `json:"executionName"`
-	ExecutionID   interface{}    `json:"executionID"`
-	ProductName   string         `json:"productName"`
-	ProductType   string         `json:"productType"`
-	BranchName    string         `json:"branchName"`
-	Files         []interface{}  `json:"files"`
+	ID            interface{}   `json:"id"`
+	Project       interface{}   `json:"project"`
+	Product       interface{}   `json:"product"`
+	Branch        interface{}   `json:"branch"`
+	Execution     interface{}   `json:"execution"`
+	Name          string        `json:"name"`
+	ScmPath       string        `json:"scmPath"`
+	FilePath      string        `json:"filePath"`
+	Date          string        `json:"date"`
+	Stories       interface{}   `json:"stories"`
+	Bugs          interface{}   `json:"bugs"`
+	Builder       interface{}   `json:"builder"`
+	Desc          string        `json:"desc"`
+	Deleted       interface{}   `json:"deleted"`
+	ExecutionName string        `json:"executionName"`
+	ExecutionID   interface{}   `json:"executionID"`
+	ProductName   string        `json:"productName"`
+	ProductType   string        `json:"productType"`
+	BranchName    string        `json:"branchName"`
+	Files         []interface{} `json:"files"`
 }
 
 // BuildListResponse 版本列表响应
@@ -1178,8 +1185,36 @@ func (c *ZentaoClient) GetExecutionStories(token string, executionID string) (*S
 	return &storyList, nil
 }
 
-// AddBugComment 给Bug添加备注（使用表单接口）
-func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string) (map[string]interface{}, error) {
+const (
+	maxBugCommentImages    = 10
+	maxBugCommentImageSize = 20 << 20
+)
+
+var (
+	commentImageTagPattern  = regexp.MustCompile(`(?is)<img\b[^>]*>`)
+	commentImageAttrPattern = regexp.MustCompile(
+		`(?i)\b(src|alt)\s*=\s*["']([^"']*)["']`,
+	)
+	commentImageFilePattern = regexp.MustCompile(`(?i)(?:^|/)file-read-(\d+)\.[a-z0-9]+(?:[?#].*)?$`)
+	commentBreakPattern     = regexp.MustCompile(`(?i)<br\s*/?>`)
+	commentBlockEndPattern  = regexp.MustCompile(`(?i)</(?:p|div|li|tr|h[1-6])\s*>`)
+)
+
+// BugCommentImage Bug备注中的图片信息。
+type BugCommentImage struct {
+	FileID string `json:"file_id,omitempty"`
+	URL    string `json:"url"`
+	Name   string `json:"name,omitempty"`
+}
+
+// AddBugComment 给Bug添加备注，并可上传本地图片后插入备注正文。
+func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string, imagePaths []string) (map[string]interface{}, error) {
+	_ = token // 备注和编辑器图片上传使用禅道 Web Session，而不是 REST Token。
+
+	if len(imagePaths) > maxBugCommentImages {
+		return nil, fmt.Errorf("图片数量不能超过 %d 张", maxBugCommentImages)
+	}
+
 	// 从 REST API 的 baseURL 提取 web 基础地址
 	webBaseURL := c.baseURL
 	if idx := findStr(webBaseURL, "/api.php"); idx > 0 {
@@ -1187,7 +1222,10 @@ func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string)
 	}
 
 	// 使用带 cookie jar 的客户端
-	jar, _ := cookiejar.New(nil)
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建会话失败: %w", err)
+	}
 	sessionClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Jar:     jar,
@@ -1198,15 +1236,35 @@ func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string)
 		return nil, fmt.Errorf("登录失败: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/action-comment-bug-%s.html", webBaseURL, bugID)
+	uid, err := generateUID()
+	if err != nil {
+		return nil, fmt.Errorf("生成图片上传 UID 失败: %w", err)
+	}
+
+	uploadedImages := make([]BugCommentImage, 0, len(imagePaths))
+	for _, imagePath := range imagePaths {
+		imagePath = strings.TrimSpace(imagePath)
+		if imagePath == "" {
+			return nil, fmt.Errorf("图片路径不能为空")
+		}
+
+		image, err := c.uploadBugCommentImage(sessionClient, webBaseURL, bugID, uid, imagePath)
+		if err != nil {
+			return nil, fmt.Errorf("上传图片 %q 失败: %w", filepath.Base(imagePath), err)
+		}
+		uploadedImages = append(uploadedImages, *image)
+	}
+
+	commentHTML := buildBugCommentHTML(comment, uploadedImages)
+	commentURL := fmt.Sprintf("%s/action-comment-bug-%s.html", webBaseURL, bugID)
 
 	// 构建表单数据
 	formData := urlValues{
-		"actioncomment": []string{fmt.Sprintf("<p><span>%s</span></p>", comment)},
-		"uid":           []string{generateUID()},
+		"actioncomment": []string{commentHTML},
+		"uid":           []string{uid},
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBufferString(formData.Encode()))
+	req, err := http.NewRequest("POST", commentURL, bytes.NewBufferString(formData.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -1231,11 +1289,143 @@ func (c *ZentaoClient) AddBugComment(token string, bugID string, comment string)
 		return nil, fmt.Errorf("API返回错误状态码 %d: %s", resp.StatusCode, string(body))
 	}
 
+	comments, err := c.getBugCommentsWithClient(webBaseURL, sessionClient, bugID)
+	if err != nil {
+		return nil, fmt.Errorf("备注请求已提交，但回读验证失败（请勿自动重试）: %w", err)
+	}
+
+	matchedComment := findMatchingBugComment(comments, comment, uploadedImages)
+	if matchedComment == nil {
+		return nil, fmt.Errorf("备注请求已提交，但回读未找到对应内容（请勿自动重试）")
+	}
+
 	return map[string]interface{}{
-		"success": true,
-		"message": "备注添加成功",
-		"bug_id":  bugID,
+		"success":    true,
+		"verified":   true,
+		"message":    "备注添加成功",
+		"bug_id":     bugID,
+		"comment_id": matchedComment["id"],
+		"images":     uploadedImages,
 	}, nil
+}
+
+func (c *ZentaoClient) uploadBugCommentImage(client *http.Client, webBaseURL, bugID, uid, imagePath string) (*BugCommentImage, error) {
+	file, err := os.Open(imagePath)
+	if err != nil {
+		return nil, fmt.Errorf("打开文件失败: %w", err)
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("读取文件信息失败: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("路径不是普通文件")
+	}
+	if info.Size() == 0 {
+		return nil, fmt.Errorf("图片文件为空")
+	}
+	if info.Size() > maxBugCommentImageSize {
+		return nil, fmt.Errorf("图片大小不能超过 %d MiB", maxBugCommentImageSize>>20)
+	}
+
+	header := make([]byte, 512)
+	n, err := file.Read(header)
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("读取图片失败: %w", err)
+	}
+	contentType := http.DetectContentType(header[:n])
+	if !isAllowedBugCommentImageType(contentType) {
+		return nil, fmt.Errorf("不支持的图片类型 %s", contentType)
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("重置文件读取位置失败: %w", err)
+	}
+
+	var requestBody bytes.Buffer
+	writer := multipart.NewWriter(&requestBody)
+	part, err := writer.CreateFormFile("imgFile", filepath.Base(imagePath))
+	if err != nil {
+		return nil, fmt.Errorf("创建上传表单失败: %w", err)
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return nil, fmt.Errorf("写入上传表单失败: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("完成上传表单失败: %w", err)
+	}
+
+	uploadURL := fmt.Sprintf("%s/file-ajaxUpload-%s.html", webBaseURL, uid)
+	req, err := http.NewRequest(http.MethodPost, uploadURL, &requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("创建上传请求失败: %w", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("Referer", fmt.Sprintf("%s/bug-view-%s.html", webBaseURL, bugID))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("上传请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取上传响应失败: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("上传接口返回状态码 %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Error   int    `json:"error"`
+		URL     string `json:"url"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("解析上传响应失败: %w", err)
+	}
+	if result.Error != 0 || result.URL == "" {
+		return nil, fmt.Errorf("上传接口返回失败: %s", result.Message)
+	}
+
+	return &BugCommentImage{
+		FileID: extractBugCommentImageFileID(result.URL),
+		URL:    result.URL,
+		Name:   filepath.Base(imagePath),
+	}, nil
+}
+
+func isAllowedBugCommentImageType(contentType string) bool {
+	switch contentType {
+	case "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp":
+		return true
+	default:
+		return false
+	}
+}
+
+func buildBugCommentHTML(comment string, images []BugCommentImage) string {
+	var content strings.Builder
+	escapedComment := html.EscapeString(comment)
+	escapedComment = strings.ReplaceAll(escapedComment, "\r\n", "\n")
+	escapedComment = strings.ReplaceAll(escapedComment, "\r", "\n")
+	escapedComment = strings.ReplaceAll(escapedComment, "\n", "<br />")
+	content.WriteString("<p><span>")
+	content.WriteString(escapedComment)
+	content.WriteString("</span></p>")
+
+	for _, image := range images {
+		content.WriteString(`<p><img src="`)
+		content.WriteString(html.EscapeString(image.URL))
+		content.WriteString(`" alt="`)
+		content.WriteString(html.EscapeString(image.Name))
+		content.WriteString(`" /></p>`)
+	}
+	return content.String()
 }
 
 // loginForSessionWithClient 使用指定客户端登录
@@ -1250,9 +1440,18 @@ func (c *ZentaoClient) loginForSessionWithClient(webBaseURL string, client *http
 	if err != nil {
 		return fmt.Errorf("获取 verifyRand 失败: %w", err)
 	}
-	randBody, _ := io.ReadAll(randResp.Body)
+	randBody, err := io.ReadAll(randResp.Body)
 	randResp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("读取 verifyRand 失败: %w", err)
+	}
+	if randResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("获取 verifyRand 返回状态码 %d: %s", randResp.StatusCode, string(randBody))
+	}
 	verifyRand := strings.TrimSpace(string(randBody))
+	if verifyRand == "" {
+		return fmt.Errorf("verifyRand 为空")
+	}
 
 	// 2. 加密密码: md5(md5(password) + verifyRand)
 	passwordMD5 := md5Hash(config.Password)
@@ -1287,15 +1486,19 @@ func (c *ZentaoClient) loginForSessionWithClient(webBaseURL string, client *http
 	defer resp.Body.Close()
 
 	// 检查登录结果
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("读取登录响应失败: %w", err)
+	}
 	var result struct {
 		Result  string `json:"result"`
 		Message string `json:"message"`
 	}
-	if err := json.Unmarshal(body, &result); err == nil {
-		if result.Result != "success" {
-			return fmt.Errorf("登录失败: %s", result.Message)
-		}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("解析登录响应失败: %w", err)
+	}
+	if result.Result != "success" {
+		return fmt.Errorf("登录失败: %s", result.Message)
 	}
 
 	return nil
@@ -1308,14 +1511,13 @@ func md5Hash(s string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// generateUID 生成随机 UID
-func generateUID() string {
-	const hexChars = "0123456789abcdef"
-	b := make([]byte, 12)
-	for i := range b {
-		b[i] = hexChars[i%16]
+// generateUID 生成图片上传和备注提交共用的随机 UID。
+func generateUID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := crand.Read(b); err != nil {
+		return "", err
 	}
-	return string(b)
+	return hex.EncodeToString(b), nil
 }
 
 // urlValues 简单的 URL 编码表单数据
@@ -1360,7 +1562,10 @@ func (c *ZentaoClient) GetBugComments(bugID string) ([]map[string]interface{}, e
 	}
 
 	// 登录获取 session
-	jar, _ := cookiejar.New(nil)
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建会话失败: %w", err)
+	}
 	sessionClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Jar:     jar,
@@ -1369,6 +1574,11 @@ func (c *ZentaoClient) GetBugComments(bugID string) ([]map[string]interface{}, e
 	if err := c.loginForSessionWithClient(webBaseURL, sessionClient); err != nil {
 		return nil, fmt.Errorf("登录失败: %w", err)
 	}
+
+	return c.getBugCommentsWithClient(webBaseURL, sessionClient, bugID)
+}
+
+func (c *ZentaoClient) getBugCommentsWithClient(webBaseURL string, sessionClient *http.Client, bugID string) ([]map[string]interface{}, error) {
 
 	apiURL := fmt.Sprintf("%s/bug-view-%s.json", webBaseURL, bugID)
 
@@ -1410,28 +1620,41 @@ func (c *ZentaoClient) GetBugComments(bugID string) ([]map[string]interface{}, e
 
 	// 解析 data 字段（嵌套的 JSON）
 	// actions 是一个 map[string]Action
+	type bugAction struct {
+		ID      interface{} `json:"id"`
+		Action  string      `json:"action"`
+		Comment string      `json:"comment"`
+		Date    string      `json:"date"`
+		Actor   string      `json:"actor"`
+	}
 	var bugDetail struct {
-		Actions map[string]struct {
-			ID      interface{} `json:"id"`
-			Action  string      `json:"action"`
-			Comment string      `json:"comment"`
-			Date    string      `json:"date"`
-			Actor   string      `json:"actor"`
-		} `json:"actions"`
+		Actions map[string]bugAction `json:"actions"`
 	}
 	if err := json.Unmarshal([]byte(result.Data), &bugDetail); err != nil {
 		return nil, fmt.Errorf("解析Bug详情失败: %w", err)
 	}
 
 	// 只返回有备注的记录
-	var comments []map[string]interface{}
+	actions := make([]bugAction, 0, len(bugDetail.Actions))
 	for _, action := range bugDetail.Actions {
+		actions = append(actions, action)
+	}
+	sort.SliceStable(actions, func(i, j int) bool {
+		if actions[i].Date == actions[j].Date {
+			return fmt.Sprint(actions[i].ID) < fmt.Sprint(actions[j].ID)
+		}
+		return actions[i].Date < actions[j].Date
+	})
+
+	var comments []map[string]interface{}
+	for _, action := range actions {
 		if action.Comment != "" {
-			// 清理 HTML 标签
 			content := stripHTMLTags(action.Comment)
 			comments = append(comments, map[string]interface{}{
 				"id":      action.ID,
 				"content": content,
+				"html":    action.Comment,
+				"images":  extractBugCommentImages(action.Comment),
 				"date":    action.Date,
 				"user":    action.Actor,
 			})
@@ -1439,6 +1662,64 @@ func (c *ZentaoClient) GetBugComments(bugID string) ([]map[string]interface{}, e
 	}
 
 	return comments, nil
+}
+
+func extractBugCommentImages(commentHTML string) []BugCommentImage {
+	tags := commentImageTagPattern.FindAllString(commentHTML, -1)
+	images := make([]BugCommentImage, 0, len(tags))
+	for _, tag := range tags {
+		var image BugCommentImage
+		for _, match := range commentImageAttrPattern.FindAllStringSubmatch(tag, -1) {
+			value := html.UnescapeString(match[2])
+			switch strings.ToLower(match[1]) {
+			case "src":
+				image.URL = value
+			case "alt":
+				image.Name = value
+			}
+		}
+		if image.URL == "" {
+			continue
+		}
+		image.FileID = extractBugCommentImageFileID(image.URL)
+		images = append(images, image)
+	}
+	return images
+}
+
+func extractBugCommentImageFileID(imageURL string) string {
+	match := commentImageFilePattern.FindStringSubmatch(imageURL)
+	if len(match) < 2 {
+		return ""
+	}
+	return match[1]
+}
+
+func findMatchingBugComment(comments []map[string]interface{}, comment string, uploadedImages []BugCommentImage) map[string]interface{} {
+	wantText := normalizeBugCommentText(comment)
+	for i := len(comments) - 1; i >= 0; i-- {
+		content, _ := comments[i]["content"].(string)
+		if wantText != "" && !strings.Contains(normalizeBugCommentText(content), wantText) {
+			continue
+		}
+
+		commentHTML, _ := comments[i]["html"].(string)
+		allImagesFound := true
+		for _, image := range uploadedImages {
+			if !strings.Contains(commentHTML, html.EscapeString(image.URL)) && !strings.Contains(commentHTML, image.URL) {
+				allImagesFound = false
+				break
+			}
+		}
+		if allImagesFound {
+			return comments[i]
+		}
+	}
+	return nil
+}
+
+func normalizeBugCommentText(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
 // TestCaseStep 用例步骤
@@ -1454,118 +1735,118 @@ type TestCaseStep struct {
 
 // TestCaseListItem 用例列表项
 type TestCaseListItem struct {
-	ID             interface{} `json:"id"`
-	Project        interface{} `json:"project"`
-	Product        interface{} `json:"product"`
-	Execution      interface{} `json:"execution"`
-	Branch         interface{} `json:"branch"`
-	Lib            interface{} `json:"lib"`
-	Module         interface{} `json:"module"`
-	Path           interface{} `json:"path"`
-	Story          interface{} `json:"story"`
-	StoryVersion   interface{} `json:"storyVersion"`
-	Title          string      `json:"title"`
-	Precondition   string      `json:"precondition"`
-	Keywords       string      `json:"keywords"`
-	Pri            interface{} `json:"pri"`
-	Type           string      `json:"type"`
-	Auto           string      `json:"auto"`
-	Frame          string      `json:"frame"`
-	Stage          string      `json:"stage"`
-	HowRun         string      `json:"howRun"`
-	ScriptedBy     string      `json:"scriptedBy"`
-	ScriptedDate   interface{} `json:"scriptedDate"`
-	ScriptStatus   string      `json:"scriptStatus"`
-	ScriptLocation string      `json:"scriptLocation"`
-	Status         string      `json:"status"`
-	SubStatus      string      `json:"subStatus"`
-	Color          string      `json:"color"`
-	Frequency      string      `json:"frequency"`
-	Order          interface{} `json:"order"`
-	OpenedBy       *User       `json:"openedBy,omitempty"`
-	OpenedDate     string      `json:"openedDate"`
-	ReviewedBy     interface{} `json:"reviewedBy"`
-	ReviewedDate   interface{} `json:"reviewedDate"`
-	LastEditedBy   interface{} `json:"lastEditedBy"`
-	LastEditedDate interface{} `json:"lastEditedDate"`
-	Version        interface{} `json:"version"`
-	LinkCase       string      `json:"linkCase"`
-	FromBug        interface{} `json:"fromBug"`
-	FromCaseID     interface{} `json:"fromCaseID"`
+	ID              interface{} `json:"id"`
+	Project         interface{} `json:"project"`
+	Product         interface{} `json:"product"`
+	Execution       interface{} `json:"execution"`
+	Branch          interface{} `json:"branch"`
+	Lib             interface{} `json:"lib"`
+	Module          interface{} `json:"module"`
+	Path            interface{} `json:"path"`
+	Story           interface{} `json:"story"`
+	StoryVersion    interface{} `json:"storyVersion"`
+	Title           string      `json:"title"`
+	Precondition    string      `json:"precondition"`
+	Keywords        string      `json:"keywords"`
+	Pri             interface{} `json:"pri"`
+	Type            string      `json:"type"`
+	Auto            string      `json:"auto"`
+	Frame           string      `json:"frame"`
+	Stage           string      `json:"stage"`
+	HowRun          string      `json:"howRun"`
+	ScriptedBy      string      `json:"scriptedBy"`
+	ScriptedDate    interface{} `json:"scriptedDate"`
+	ScriptStatus    string      `json:"scriptStatus"`
+	ScriptLocation  string      `json:"scriptLocation"`
+	Status          string      `json:"status"`
+	SubStatus       string      `json:"subStatus"`
+	Color           string      `json:"color"`
+	Frequency       string      `json:"frequency"`
+	Order           interface{} `json:"order"`
+	OpenedBy        *User       `json:"openedBy,omitempty"`
+	OpenedDate      string      `json:"openedDate"`
+	ReviewedBy      interface{} `json:"reviewedBy"`
+	ReviewedDate    interface{} `json:"reviewedDate"`
+	LastEditedBy    interface{} `json:"lastEditedBy"`
+	LastEditedDate  interface{} `json:"lastEditedDate"`
+	Version         interface{} `json:"version"`
+	LinkCase        string      `json:"linkCase"`
+	FromBug         interface{} `json:"fromBug"`
+	FromCaseID      interface{} `json:"fromCaseID"`
 	FromCaseVersion interface{} `json:"fromCaseVersion"`
-	Deleted        interface{} `json:"deleted"`
-	LastRunner     string      `json:"lastRunner"`
-	LastRunDate    interface{} `json:"lastRunDate"`
-	LastRunResult  string      `json:"lastRunResult"`
-	StoryTitle     interface{} `json:"storyTitle"`
-	Needconfirm    interface{} `json:"needconfirm"`
-	Bugs           interface{} `json:"bugs"`
-	Results        interface{} `json:"results"`
-	CaseFails      interface{} `json:"caseFails"`
-	StepNumber     interface{} `json:"stepNumber"`
-	StatusName     string      `json:"statusName"`
+	Deleted         interface{} `json:"deleted"`
+	LastRunner      string      `json:"lastRunner"`
+	LastRunDate     interface{} `json:"lastRunDate"`
+	LastRunResult   string      `json:"lastRunResult"`
+	StoryTitle      interface{} `json:"storyTitle"`
+	Needconfirm     interface{} `json:"needconfirm"`
+	Bugs            interface{} `json:"bugs"`
+	Results         interface{} `json:"results"`
+	CaseFails       interface{} `json:"caseFails"`
+	StepNumber      interface{} `json:"stepNumber"`
+	StatusName      string      `json:"statusName"`
 }
 
 // TestCaseListResponse 用例列表响应
 type TestCaseListResponse struct {
-	Page      int               `json:"page"`
-	Total     int               `json:"total"`
-	Limit     int               `json:"limit"`
+	Page      int                `json:"page"`
+	Total     int                `json:"total"`
+	Limit     int                `json:"limit"`
 	Testcases []TestCaseListItem `json:"testcases"`
 }
 
 // TestCase 用例详情
 type TestCase struct {
-	ID             interface{}    `json:"id"`
-	Project        interface{}    `json:"project"`
-	Product        interface{}    `json:"product"`
-	Execution      interface{}    `json:"execution"`
-	Branch         interface{}    `json:"branch"`
-	Lib            interface{}    `json:"lib"`
-	Module         interface{}    `json:"module"`
-	Path           interface{}    `json:"path"`
-	Story          interface{}    `json:"story"`
-	StoryVersion   interface{}    `json:"storyVersion"`
-	Title          string         `json:"title"`
-	Precondition   string         `json:"precondition"`
-	Keywords       string         `json:"keywords"`
-	Pri            interface{}    `json:"pri"`
-	Type           string         `json:"type"`
-	Auto           string         `json:"auto"`
-	Frame          string         `json:"frame"`
-	Stage          string         `json:"stage"`
-	HowRun         string         `json:"howRun"`
-	ScriptedBy     string         `json:"scriptedBy"`
-	ScriptedDate   interface{}    `json:"scriptedDate"`
-	ScriptStatus   string         `json:"scriptStatus"`
-	ScriptLocation string         `json:"scriptLocation"`
-	Status         string         `json:"status"`
-	SubStatus      string         `json:"subStatus"`
-	Color          string         `json:"color"`
-	Frequency      string         `json:"frequency"`
-	Order          interface{}    `json:"order"`
-	OpenedBy       *User          `json:"openedBy,omitempty"`
-	OpenedDate     string         `json:"openedDate"`
-	ReviewedBy     interface{}    `json:"reviewedBy"`
-	ReviewedDate   interface{}    `json:"reviewedDate"`
-	LastEditedBy   interface{}    `json:"lastEditedBy"`
-	LastEditedDate interface{}    `json:"lastEditedDate"`
-	Version        interface{}    `json:"version"`
-	LinkCase       string         `json:"linkCase"`
-	FromBug        interface{}    `json:"fromBug"`
-	FromCaseID     interface{}    `json:"fromCaseID"`
-	FromCaseVersion interface{}  `json:"fromCaseVersion"`
-	Deleted        interface{}    `json:"deleted"`
-	LastRunner     string         `json:"lastRunner"`
-	LastRunDate    interface{}    `json:"lastRunDate"`
-	LastRunResult  string         `json:"lastRunResult"`
-	StoryTitle     interface{}    `json:"storyTitle"`
-	Needconfirm    interface{}    `json:"needconfirm"`
-	ToBugs         []interface{}  `json:"toBugs"`
-	Steps          []TestCaseStep `json:"steps"`
-	Files          []interface{}  `json:"files"`
-	CurrentVersion interface{}    `json:"currentVersion"`
-	CaseFails      interface{}    `json:"caseFails"`
+	ID              interface{}    `json:"id"`
+	Project         interface{}    `json:"project"`
+	Product         interface{}    `json:"product"`
+	Execution       interface{}    `json:"execution"`
+	Branch          interface{}    `json:"branch"`
+	Lib             interface{}    `json:"lib"`
+	Module          interface{}    `json:"module"`
+	Path            interface{}    `json:"path"`
+	Story           interface{}    `json:"story"`
+	StoryVersion    interface{}    `json:"storyVersion"`
+	Title           string         `json:"title"`
+	Precondition    string         `json:"precondition"`
+	Keywords        string         `json:"keywords"`
+	Pri             interface{}    `json:"pri"`
+	Type            string         `json:"type"`
+	Auto            string         `json:"auto"`
+	Frame           string         `json:"frame"`
+	Stage           string         `json:"stage"`
+	HowRun          string         `json:"howRun"`
+	ScriptedBy      string         `json:"scriptedBy"`
+	ScriptedDate    interface{}    `json:"scriptedDate"`
+	ScriptStatus    string         `json:"scriptStatus"`
+	ScriptLocation  string         `json:"scriptLocation"`
+	Status          string         `json:"status"`
+	SubStatus       string         `json:"subStatus"`
+	Color           string         `json:"color"`
+	Frequency       string         `json:"frequency"`
+	Order           interface{}    `json:"order"`
+	OpenedBy        *User          `json:"openedBy,omitempty"`
+	OpenedDate      string         `json:"openedDate"`
+	ReviewedBy      interface{}    `json:"reviewedBy"`
+	ReviewedDate    interface{}    `json:"reviewedDate"`
+	LastEditedBy    interface{}    `json:"lastEditedBy"`
+	LastEditedDate  interface{}    `json:"lastEditedDate"`
+	Version         interface{}    `json:"version"`
+	LinkCase        string         `json:"linkCase"`
+	FromBug         interface{}    `json:"fromBug"`
+	FromCaseID      interface{}    `json:"fromCaseID"`
+	FromCaseVersion interface{}    `json:"fromCaseVersion"`
+	Deleted         interface{}    `json:"deleted"`
+	LastRunner      string         `json:"lastRunner"`
+	LastRunDate     interface{}    `json:"lastRunDate"`
+	LastRunResult   string         `json:"lastRunResult"`
+	StoryTitle      interface{}    `json:"storyTitle"`
+	Needconfirm     interface{}    `json:"needconfirm"`
+	ToBugs          []interface{}  `json:"toBugs"`
+	Steps           []TestCaseStep `json:"steps"`
+	Files           []interface{}  `json:"files"`
+	CurrentVersion  interface{}    `json:"currentVersion"`
+	CaseFails       interface{}    `json:"caseFails"`
 }
 
 // TestCaseStepRequest 创建用例步骤请求
@@ -1773,6 +2054,9 @@ func (c *ZentaoClient) CreateTestCase(token string, productID string, reqBody *C
 
 // stripHTMLTags 移除 HTML 标签
 func stripHTMLTags(s string) string {
+	s = commentBreakPattern.ReplaceAllString(s, "\n")
+	s = commentBlockEndPattern.ReplaceAllString(s, "\n")
+
 	// 简单移除 HTML 标签
 	var result bytes.Buffer
 	inTag := false
@@ -1789,7 +2073,7 @@ func stripHTMLTags(s string) string {
 			result.WriteRune(r)
 		}
 	}
-	return strings.TrimSpace(result.String())
+	return strings.TrimSpace(html.UnescapeString(result.String()))
 }
 
 // UserProfile 用户个人信息

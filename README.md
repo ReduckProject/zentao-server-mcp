@@ -66,15 +66,12 @@ go build -o zentao-mcp .
 
 ## 工具列表
 
-### 配置与 Token
+### 配置与连接
 
 | 工具名称 | 描述 |
 |---------|------|
 | `configure` | 配置禅道服务器连接信息（首次使用必须调用） |
-| `get_token` | 获取禅道 API Token（自动处理缓存和刷新） |
-| `refresh_token` | 强制刷新 Token（忽略缓存） |
-| `token_status` | 查看当前 Token 状态和配置信息 |
-| `get_profile` | 获取当前登录用户的个人信息 |
+| `get_profile` | 获取当前登录用户的个人信息和脱敏连接状态 |
 | `get_today_dynamic` | 获取当前用户的动态（支持不同时间范围） |
 
 ### 产品管理
@@ -153,7 +150,19 @@ go build -o zentao-mcp .
 调用 add_bug_comment 工具:
 - bug_id: Bug ID
 - comment: 备注内容
+- image_paths: 本地图片路径数组（可选，最多10张，单张不超过20MiB）
 ```
+
+示例:
+```json
+{
+  "bug_id": "35",
+  "comment": "问题截图如下：",
+  "image_paths": ["C:/temp/error.png"]
+}
+```
+
+图片会先上传到禅道，再以富文本图片插入备注。`get_bug_comments` 返回的每条备注包含纯文本 `content`、原始富文本 `html` 和图片数组 `images`。
 
 ### 4. 获取 Bug 列表
 

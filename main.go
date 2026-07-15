@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -72,24 +73,9 @@ func main() {
 		),
 	)
 
-	// 获取Token
-	getTokenTool := mcp.NewTool("get_token",
-		mcp.WithDescription("获取禅道API Token（自动处理缓存和刷新）"),
-	)
-
-	// 刷新Token
-	refreshTokenTool := mcp.NewTool("refresh_token",
-		mcp.WithDescription("强制刷新Token（忽略缓存）"),
-	)
-
-	// 查看Token状态
-	tokenStatusTool := mcp.NewTool("token_status",
-		mcp.WithDescription("查看当前Token状态和配置信息"),
-	)
-
 	// 获取用户信息
 	getProfileTool := mcp.NewTool("get_profile",
-		mcp.WithDescription("获取当前登录用户的个人信息"),
+		mcp.WithDescription("获取当前登录用户的个人信息和脱敏连接状态"),
 	)
 
 	// 获取今日动态
@@ -586,12 +572,13 @@ func main() {
 			mcp.Required(),
 			mcp.Description("备注内容"),
 		),
+		mcp.WithArray("image_paths",
+			mcp.Description("要上传并插入备注的本地图片路径数组（可选，最多10张）"),
+			mcp.Items(map[string]interface{}{"type": "string"}),
+		),
 	)
 
 	s.AddTool(configureTool, configureHandler)
-	s.AddTool(getTokenTool, getTokenHandler)
-	s.AddTool(refreshTokenTool, refreshTokenHandler)
-	s.AddTool(tokenStatusTool, tokenStatusHandler)
 	s.AddTool(getProfileTool, getProfileHandler)
 	s.AddTool(getTodayDynamicTool, getTodayDynamicHandler)
 	s.AddTool(getProductsTool, getProductsHandler)
@@ -660,56 +647,21 @@ func configureHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 	}
 
 	// 配置保存后立即获取token
-	token, err := globalTokenManager.GetToken()
+	_, err := globalTokenManager.GetToken()
 	if err != nil {
 		return errorResult(fmt.Sprintf("配置成功，但获取Token失败: %v", err)), nil
 	}
 
 	result := map[string]interface{}{
-		"success": true,
-		"message": "配置成功并已获取Token",
-		"token":   token,
+		"success":           true,
+		"message":           "配置成功并已验证连接",
+		"connection_status": globalTokenManager.GetConnectionStatus(),
 	}
 	if defaultProduct != "" {
 		result["default_product"] = defaultProduct
 	}
 
 	data, _ := toJSON(result)
-	return mcp.NewToolResultText(data), nil
-}
-
-func getTokenHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if !globalTokenManager.IsConfigured() {
-		return errorResult("禅道未配置，请先调用 configure 工具设置服务器地址和账号密码"), nil
-	}
-
-	token, err := globalTokenManager.GetToken()
-	if err != nil {
-		return errorResult(fmt.Sprintf("获取Token失败: %v", err)), nil
-	}
-
-	return mcp.NewToolResultText(fmt.Sprintf(`{"token": "%s"}`, token)), nil
-}
-
-func refreshTokenHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	if !globalTokenManager.IsConfigured() {
-		return errorResult("禅道未配置，请先调用 configure 工具设置服务器地址和账号密码"), nil
-	}
-
-	token, err := globalTokenManager.RefreshToken()
-	if err != nil {
-		return errorResult(fmt.Sprintf("刷新Token失败: %v", err)), nil
-	}
-
-	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "message": "Token已刷新", "token": "%s"}`, token)), nil
-}
-
-func tokenStatusHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	info := globalTokenManager.GetTokenInfo()
-	data, err := toJSON(info)
-	if err != nil {
-		return errorResult(fmt.Sprintf("序列化状态信息失败: %v", err)), nil
-	}
 	return mcp.NewToolResultText(data), nil
 }
 
@@ -737,7 +689,14 @@ func getProfileHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		}
 	}
 
-	data, err := toJSON(profile)
+	connectionStatus := globalTokenManager.GetConnectionStatus()
+	connectionStatus["connected"] = true
+	result := map[string]interface{}{
+		"profile":           profile.Profile,
+		"connection_status": connectionStatus,
+	}
+
+	data, err := toJSON(result)
 	if err != nil {
 		return errorResult(fmt.Sprintf("序列化用户信息失败: %v", err)), nil
 	}
@@ -2050,6 +2009,25 @@ func addBugCommentHandler(ctx context.Context, request mcp.CallToolRequest) (*mc
 	if !ok {
 		return errorResult("comment is required"), nil
 	}
+	if strings.TrimSpace(comment) == "" {
+		return errorResult("comment cannot be empty"), nil
+	}
+
+	var imagePaths []string
+	if rawImagePaths, exists := request.Params.Arguments["image_paths"]; exists {
+		items, ok := rawImagePaths.([]interface{})
+		if !ok {
+			return errorResult("image_paths must be an array of strings"), nil
+		}
+		imagePaths = make([]string, 0, len(items))
+		for _, item := range items {
+			imagePath, ok := item.(string)
+			if !ok || strings.TrimSpace(imagePath) == "" {
+				return errorResult("image_paths must contain only non-empty strings"), nil
+			}
+			imagePaths = append(imagePaths, imagePath)
+		}
+	}
 
 	token, err := globalTokenManager.GetToken()
 	if err != nil {
@@ -2057,16 +2035,9 @@ func addBugCommentHandler(ctx context.Context, request mcp.CallToolRequest) (*mc
 	}
 
 	client := NewZentaoClient(globalTokenManager.GetConfig().BaseURL)
-	result, err := client.AddBugComment(token, bugID, comment)
+	result, err := client.AddBugComment(token, bugID, comment, imagePaths)
 	if err != nil {
-		token, refreshErr := globalTokenManager.RefreshToken()
-		if refreshErr != nil {
-			return errorResult(fmt.Sprintf("刷新Token失败: %v", refreshErr)), nil
-		}
-		result, err = client.AddBugComment(token, bugID, comment)
-		if err != nil {
-			return errorResult(fmt.Sprintf("添加备注失败: %v", err)), nil
-		}
+		return errorResult(fmt.Sprintf("添加备注失败: %v", err)), nil
 	}
 
 	data, err := toJSON(result)
