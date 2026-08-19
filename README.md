@@ -66,59 +66,19 @@ go build -o zentao-mcp .
 
 ## 工具列表
 
-### 配置与连接
+公开工具已按领域从 24 个精简为 7 个。同一领域通过必填的 `action` 区分操作。
 
-| 工具名称 | 描述 |
-|---------|------|
-| `configure` | 配置禅道服务器连接信息（首次使用必须调用） |
-| `get_profile` | 获取当前登录用户的个人信息和脱敏连接状态 |
-| `get_today_dynamic` | 获取当前用户的动态（支持不同时间范围） |
+| 工具名称 | action | 功能 |
+|---------|--------|------|
+| `configure` | 无 | 配置禅道服务器连接信息 |
+| `zentao_user` | `profile`, `dynamic` | 当前用户、连接状态和动态 |
+| `zentao_products` | `list`, `get`, `create` | 产品查询与创建 |
+| `zentao_bugs` | `list`, `get`, `create`, `update`, `list_comments`, `add_comment` | Bug 与备注管理 |
+| `zentao_builds` | `list`, `get`, `create`, `update` | 版本管理 |
+| `zentao_stories` | `list_product`, `list_project`, `list_execution`, `get`, `create` | 需求管理 |
+| `zentao_testcases` | `list`, `get`, `create` | 测试用例管理 |
 
-### 产品管理
-
-| 工具名称 | 描述 |
-|---------|------|
-| `get_products` | 获取禅道产品列表 |
-| `get_product` | 获取禅道产品详情 |
-| `create_product` | 创建禅道产品 |
-
-### Bug 管理
-
-| 工具名称 | 描述 |
-|---------|------|
-| `create_bug` | 创建 Bug |
-| `update_bug` | 修改 Bug |
-| `get_bugs` | 获取产品 Bug 列表 |
-| `get_bug` | 获取 Bug 详情 |
-| `get_bug_comments` | 获取 Bug 备注列表 |
-| `add_bug_comment` | 给 Bug 添加备注 |
-
-### 版本管理
-
-| 工具名称 | 描述 |
-|---------|------|
-| `create_build` | 创建版本 |
-| `update_build` | 修改版本 |
-| `get_builds` | 获取项目版本列表 |
-| `get_build` | 获取版本详情 |
-
-### 需求管理
-
-| 工具名称 | 描述 |
-|---------|------|
-| `create_story` | 创建需求 |
-| `get_story` | 获取需求详情 |
-| `get_project_stories` | 获取项目需求列表 |
-| `get_product_stories` | 获取产品需求列表 |
-| `get_execution_stories` | 获取执行需求列表 |
-
-### 测试用例管理
-
-| 工具名称 | 描述 |
-|---------|------|
-| `get_product_testcases` | 获取产品用例列表 |
-| `get_testcase` | 获取用例详情 |
-| `create_testcase` | 创建用例 |
+每个 action 都有独立的 JSON Schema：只允许该 action 对应的字段，并约束必填项、类型、枚举、数值范围、日期格式和数组结构。服务端还会再次执行同样的运行时校验，因此多传字段或错误类型不会发送到禅道 API。
 
 ## 使用示例
 
@@ -136,7 +96,8 @@ go build -o zentao-mcp .
 ### 2. 创建 Bug
 
 ```
-调用 create_bug 工具:
+调用 zentao_bugs 工具:
+- action: create
 - title: Bug标题
 - severity: 严重程度(1-4)
 - pri: 优先级(1-4)
@@ -147,7 +108,8 @@ go build -o zentao-mcp .
 ### 3. 给 Bug 添加备注
 
 ```
-调用 add_bug_comment 工具:
+调用 zentao_bugs 工具:
+- action: add_comment
 - bug_id: Bug ID
 - comment: 备注内容
 - image_paths: 本地图片路径数组（可选，最多10张，单张不超过20MiB）
@@ -156,18 +118,20 @@ go build -o zentao-mcp .
 示例:
 ```json
 {
-  "bug_id": "35",
+  "action": "add_comment",
+  "bug_id": 35,
   "comment": "问题截图如下：",
   "image_paths": ["C:/temp/error.png"]
 }
 ```
 
-图片会先上传到禅道，再以富文本图片插入备注。`get_bug_comments` 返回的每条备注包含纯文本 `content`、原始富文本 `html` 和图片数组 `images`。
+图片会先上传到禅道，再以富文本图片插入备注。`zentao_bugs` 的 `list_comments` action 返回的每条备注包含纯文本 `content`、原始富文本 `html` 和图片数组 `images`。
 
 ### 4. 获取 Bug 列表
 
 ```
-调用 get_bugs 工具:
+调用 zentao_bugs 工具:
+- action: list
 - product_id: 产品ID或名称 (可选，使用默认产品)
 - status: Bug状态 (可选)
   - assigntome: 我的bug
@@ -181,14 +145,16 @@ go build -o zentao-mcp .
 ### 5. 获取 Bug 备注
 
 ```
-调用 get_bug_comments 工具:
+调用 zentao_bugs 工具:
+- action: list_comments
 - bug_id: Bug ID
 ```
 
 ### 6. 获取产品列表
 
 ```
-调用 get_products 工具:
+调用 zentao_products 工具:
+- action: list
 - full: true/false (是否返回完整参数)
 ```
 

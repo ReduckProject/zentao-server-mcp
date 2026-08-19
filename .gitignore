@@ -1,6 +1,10 @@
 # 编译产物
-zentao-mcp.exe
+*.exe
+*.zip
 zentao-mcp
+
+# 工具状态目录
+.omc/
 
 # 配置文件（包含敏感信息）
 zentao_config.json
@@ -8,3 +12,4 @@ zentao_config.json
 # IDE
 .idea/
 *.iml
+/pwd.txt
